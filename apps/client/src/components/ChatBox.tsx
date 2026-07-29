@@ -1,40 +1,44 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 interface ChatBoxProps {
-  onSendMessage: (message: string) => void;
+    onSendMessage: (message: string) => void;
 }
 
 const ChatBox = ({ onSendMessage }: ChatBoxProps) => {
-  const [message, setMessage] = useState("");
+    const [message, setMessage] = useState("");
 
-  const handleSendMessage = () => {
-    const trimmedMessage = message.trim();
+    const handleOnChange = (event: ChangeEvent<HTMLInputElement>) => {
+        setMessage(event.target.value)
+    }
 
-    if (!trimmedMessage) return;
+    const handleSendMessage = () => {
+        const trimmedMessage = message.trim();
 
-    onSendMessage(trimmedMessage);
+        if (!trimmedMessage) return;
 
-    setMessage("");
-  };
+        onSendMessage(trimmedMessage);
 
-  return (
-    <div>
-      <input
-        type="text"
-        placeholder="Type your message..."
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            handleSendMessage();
-          }
-        }}
-      />
+        setMessage("");
+    };
 
-      <button onClick={handleSendMessage}>
-        Send
-      </button>
-    </div>
-  );
+    return (
+        <div>
+            <input
+                type="text"
+                placeholder="Type your message..."
+                value={message}
+                onChange={handleOnChange}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        handleSendMessage();
+                    }
+                }}
+            />
+
+            <button onClick={handleSendMessage}>
+                Send
+            </button>
+        </div>
+    );
 };
 
 export default ChatBox

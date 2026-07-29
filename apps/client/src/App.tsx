@@ -1,40 +1,39 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import ChatBox from "./components/ChatBox";
 import { socket } from "./socket/socket";
 
 function App() {
-  useEffect(() => {
 
+  const [receivedMessage, setReceivedMessage] = useState("");
+
+  useEffect(() => {
+    socket.connect();
     socket.on("connect", () => {
       console.log("✅ Connected:", socket.id);
-
-      socket.emit("send_message", {
-        username: "Subramanya",
-        message: "Hello Socket.IO 👋",
-      });
     });
 
     socket.on("receive_message", (data) => {
       console.log("📩 Received:", data);
+
+      setReceivedMessage(data.message);
     });
-
-    socket.on("disconnect", () => {
-      console.log("❌ Disconnected");
-    });
-
-    socket.connect();
-
     return () => {
       socket.off("connect");
-      socket.off("receive_message");
-      socket.off("disconnect");
-
       socket.disconnect();
     };
-  }, []);
+  }, [])
+
+  const handleSendMessage = (message: string) => {
+    socket.emit("send_message", {
+      username: "Subramanya",
+      message,
+    });
+  }
 
   return (
     <div>
-      <h1>Socket.IO Chat Application</h1>
+      <ChatBox onSendMessage={handleSendMessage} />
+      <h1>{receivedMessage}</h1>
     </div>
   );
 }
