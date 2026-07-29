@@ -14,9 +14,9 @@ function App() {
 
     socket.on("receive_message", (data) => {
       console.log("📩 Received:", data);
-
       setReceivedMessage(data.message);
     });
+
     return () => {
       socket.off("connect");
       socket.disconnect();

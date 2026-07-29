@@ -14,7 +14,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
 
         socket.on("send_message", (data) => {
             console.log("📩 Message Received:", data);
-            io.emit("recieve_message", data);
+            io.emit("receive_message", data);
         });
 
         socket.on("disconnect", () => {
