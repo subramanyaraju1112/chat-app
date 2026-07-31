@@ -8,22 +8,23 @@ function App() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
+  const handleRecieveMessage = (data: ChatMessage) => {
+    setMessages((previousMessages) => [
+      ...previousMessages, data,
+    ])
+  }
+
   useEffect(() => {
     socket.connect();
     socket.on("connect", () => {
       console.log("✅ Connected:", socket.id);
     });
 
-    socket.on("receive_message", (data) => {
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        data,
-      ]);
-    });
+    socket.on("receive_message", handleRecieveMessage);
 
     return () => {
       socket.off("connect");
-      socket.off("receive_message");
+      socket.off("receive_message", handleRecieveMessage);
       socket.disconnect();
     };
   }, [])
