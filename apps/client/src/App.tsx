@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import ChatBox from "./components/ChatBox";
 import { socket } from "./socket/socket";
+import type { ChatMessage } from "./types/message";
+import MessageList from "./components/MessageList";
 
 function App() {
 
-  const [receivedMessage, setReceivedMessage] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     socket.connect();
@@ -13,12 +15,15 @@ function App() {
     });
 
     socket.on("receive_message", (data) => {
-      console.log("📩 Received:", data);
-      setReceivedMessage(data.message);
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        data,
+      ]);
     });
 
     return () => {
       socket.off("connect");
+      socket.off("receive_message");
       socket.disconnect();
     };
   }, [])
@@ -33,7 +38,7 @@ function App() {
   return (
     <div>
       <ChatBox onSendMessage={handleSendMessage} />
-      <h1>{receivedMessage}</h1>
+      <MessageList messages={messages} />
     </div>
   );
 }
