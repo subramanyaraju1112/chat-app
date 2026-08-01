@@ -12,6 +12,10 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     io.on("connection", (socket) => {
         console.log(`✅ User Connected: ${socket.id}`);
 
+        socket.on("join_chat", (data) => {
+            console.log(`${data.username} joined the chat`);
+        });
+
         socket.on("send_message", (data) => {
             console.log("📩 Message Received:", data);
             io.emit("receive_message", data);
