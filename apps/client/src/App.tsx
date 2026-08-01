@@ -3,15 +3,25 @@ import ChatBox from "./components/ChatBox";
 import { socket } from "./socket/socket";
 import type { ChatMessage } from "./types/message";
 import MessageList from "./components/MessageList";
+import JoinChat from "./components/JoinChat";
 
 function App() {
-
+  const [username, setUsername] = useState("");
+  const [isJoined, setIsJoined] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const handleRecieveMessage = (data: ChatMessage) => {
     setMessages((previousMessages) => [
       ...previousMessages, data,
     ])
+  }
+
+  const handleJoinChat = (username: string) => {
+    setUsername(username);
+    socket.emit("join_chat", {
+      username
+    });
+    setIsJoined(true);
   }
 
   useEffect(() => {
@@ -31,15 +41,19 @@ function App() {
 
   const handleSendMessage = (message: string) => {
     socket.emit("send_message", {
-      username: "Subramanya",
+      username,
       message,
     });
   }
 
   return (
     <div>
-      <ChatBox onSendMessage={handleSendMessage} />
-      <MessageList messages={messages} />
+      {!isJoined ? <JoinChat onJoin={handleJoinChat} /> : (
+        <>
+          <ChatBox onSendMessage={handleSendMessage} />
+          <MessageList messages={messages} />
+        </>
+      )}
     </div>
   );
 }
