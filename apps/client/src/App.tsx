@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import ChatBox from "./components/ChatBox";
+import ChatBox from "./components/chat/ChatBox";
 import { socket } from "./socket/socket";
 import type { ChatMessage } from "./types/message";
-import MessageList from "./components/MessageList";
-import JoinChat from "./components/JoinChat";
+import MessageList from "./components/chat/MessageList";
+import JoinChat from "./components/auth/JoinChat";
 
 function App() {
   const [username, setUsername] = useState("");
