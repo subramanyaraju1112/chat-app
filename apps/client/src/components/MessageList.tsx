@@ -1,4 +1,5 @@
-import type { ChatMessage } from "../types/message";
+import { type ChatMessage } from "../types/message";
+import ChatMessageItem from "./ChatMessage";
 
 interface MessageListProps {
     messages: ChatMessage[];
@@ -6,19 +7,21 @@ interface MessageListProps {
 
 const MessageList = ({ messages }: MessageListProps) => {
     return (
-        <div>
-            <h2>Messages</h2>
-            {
-                messages.length === 0 ? (
-                    <p>No Messages Found</p>
-                ) : (messages.map((message, index) => (
-                    <div key={index}>
-                        <strong>{message.username}</strong>: {message.message}
-                    </div>
-                )))
-            }
-        </div>
-    )
-}
+        <div className="flex-1 overflow-y-auto p-6">
 
-export default MessageList
+            <div className="space-y-6">
+
+                {messages.map((message, index) => (
+                    <ChatMessageItem
+                        key={index}
+                        message={message}
+                    />
+                ))}
+
+            </div>
+
+        </div>
+    );
+};
+
+export default MessageList;
