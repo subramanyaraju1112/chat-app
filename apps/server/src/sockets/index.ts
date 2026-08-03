@@ -1,6 +1,12 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
 
+interface JoinChatPayload {
+    username: string;
+}
+
+const connectedUsers = new Map<string, string>();
+
 export const initializeSocket = (httpServer: HTTPServer) => {
     const io = new Server(httpServer, {
         cors: {
@@ -12,8 +18,11 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     io.on("connection", (socket) => {
         console.log(`✅ User Connected: ${socket.id}`);
 
-        socket.on("join_chat", (data) => {
-            console.log(`${data.username} joined the chat`);
+        socket.on("join_chat", (data: JoinChatPayload) => {
+            connectedUsers.set(socket.id, data.username);
+            console.log("Connected Users:");
+            console.log(connectedUsers);
+            io.emit("online_users", [...connectedUsers.values()]);
         });
 
         socket.on("send_message", (data) => {
@@ -23,6 +32,11 @@ export const initializeSocket = (httpServer: HTTPServer) => {
 
         socket.on("disconnect", () => {
             console.log(`❌ User Disconnected: ${socket.id}`);
+            connectedUsers.delete(socket.id);
+            io.emit(
+                "online_users",
+                [...connectedUsers.values()]
+            );
         });
     });
 

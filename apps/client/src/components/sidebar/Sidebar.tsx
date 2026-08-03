@@ -1,4 +1,8 @@
-const Sidebar = () => {
+interface SidebarProps {
+  onlineUsers: string[]
+}
+
+const Sidebar = ({ onlineUsers }: SidebarProps) => {
   return (
     <aside className="w-72 border-r bg-white">
 
@@ -21,20 +25,23 @@ const Sidebar = () => {
         </h2>
 
         <div className="space-y-4">
+          {onlineUsers.length === 0 ? (
+            <p className="text-sm text-slate-400">No online Users</p>) :
 
-          {["Alice", "Bob"].map((user) => (
-            <div
-              key={user}
-              className="flex items-center gap-3 rounded-lg p-2 transition hover:bg-slate-100"
-            >
-              <div className="h-3 w-3 rounded-full bg-green-500" />
+            (onlineUsers.map((user: string) => (
+              <div
+                key={user}
+                className="flex items-center gap-3 rounded-lg p-2 transition hover:bg-slate-100"
+              >
+                <div className="h-3 w-3 rounded-full bg-green-500" />
 
-              <span className="font-medium text-slate-700">
-                {user}
-              </span>
+                <span className="font-medium text-slate-700">
+                  {user}
+                </span>
 
-            </div>
-          ))}
+              </div>
+            ))
+            )}
 
         </div>
 

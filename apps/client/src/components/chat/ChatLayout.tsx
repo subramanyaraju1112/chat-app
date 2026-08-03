@@ -5,17 +5,19 @@ import { type ChatMessage } from "../../types/message";
 
 interface ChatLayoutProps {
   messages: ChatMessage[];
+  onlineUsers: string[];
   onSendMessage: (message: string) => void;
 }
 
 const ChatLayout = ({
   messages,
+  onlineUsers,
   onSendMessage,
 }: ChatLayoutProps) => {
   return (
     <div className="flex h-screen bg-slate-100">
 
-      <Sidebar />
+      <Sidebar onlineUsers={onlineUsers}/>
 
       <main className="flex flex-1 flex-col">
 
