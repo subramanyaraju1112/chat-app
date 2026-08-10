@@ -10,7 +10,7 @@ function App() {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const handleRecieveMessage = (data: ChatMessage) => {
+  const handleReceiveMessage = (data: ChatMessage) => {
     setMessages((previousMessages) => [
       ...previousMessages, data,
     ])
@@ -30,7 +30,7 @@ function App() {
       console.log("✅ Connected:", socket.id);
     });
 
-    socket.on("receive_message", handleRecieveMessage);
+    socket.on("receive_message", handleReceiveMessage);
 
     socket.on("online_users", (users: string[]) => {
       setOnlineUsers(users)
@@ -39,7 +39,7 @@ function App() {
 
     return () => {
       socket.off("connect");
-      socket.off("receive_message", handleRecieveMessage);
+      socket.off("receive_message", handleReceiveMessage);
       socket.off("online_users")
       socket.disconnect();
     };
@@ -57,6 +57,7 @@ function App() {
       {!isJoined ? <JoinChat onJoin={handleJoinChat} /> : (
         <>
           <ChatLayout
+            username={username}
             messages={messages}
             onlineUsers={onlineUsers}
             onSendMessage={handleSendMessage}

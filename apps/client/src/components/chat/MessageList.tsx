@@ -2,10 +2,11 @@ import { type ChatMessage } from "../../types/message";
 import ChatMessageItem from "./ChatMessageItem";
 
 interface MessageListProps {
+    username: string;
     messages: ChatMessage[];
 }
 
-const MessageList = ({ messages }: MessageListProps) => {
+const MessageList = ({ username, messages }: MessageListProps) => {
     return (
         <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
 
@@ -26,6 +27,7 @@ const MessageList = ({ messages }: MessageListProps) => {
                     {messages.map((message, index) => (
                         <ChatMessageItem
                             key={index}
+                            username={username}
                             message={message}
                         />
                     ))}

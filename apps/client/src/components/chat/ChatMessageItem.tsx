@@ -1,12 +1,14 @@
 import { type ChatMessage } from "../../types/message";
 
-interface Props {
+interface ChatMessageItemProps {
+    username: string;
     message: ChatMessage;
 }
 
-const ChatMessageItem = ({ message }: Props) => {
+const ChatMessageItem = ({ username, message }: ChatMessageItemProps) => {
+    const isOwnMessage = message.username === username;
     return (
-        <div className="flex">
+        <div className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
 
             <div className="max-w-lg rounded-2xl bg-white px-5 py-4 shadow-sm">
 

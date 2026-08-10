@@ -4,12 +4,14 @@ import ChatBox from "./ChatBox";
 import { type ChatMessage } from "../../types/message";
 
 interface ChatLayoutProps {
+  username: string;
   messages: ChatMessage[];
   onlineUsers: string[];
   onSendMessage: (message: string) => void;
 }
 
 const ChatLayout = ({
+  username,
   messages,
   onlineUsers,
   onSendMessage,
@@ -39,7 +41,7 @@ const ChatLayout = ({
 
         </header>
 
-        <MessageList messages={messages} />
+        <MessageList username={username} messages={messages} />
 
         <ChatBox onSendMessage={onSendMessage} />
 
