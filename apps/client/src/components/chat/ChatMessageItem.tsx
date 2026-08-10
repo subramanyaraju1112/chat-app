@@ -8,28 +8,41 @@ interface ChatMessageItemProps {
 const ChatMessageItem = ({ username, message }: ChatMessageItemProps) => {
     const isOwnMessage = message.username === username;
     return (
-        <div className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+        <div
+            className={`flex ${isOwnMessage ? "justify-end" : "justify-start"
+                }`}
+        >
+            <div
+                className={`max-w-md rounded-2xl px-4 py-3 shadow-sm ${isOwnMessage
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-800"
+                    }`}
+            >
+                <p
+                    className={`mb-1 text-xs font-medium ${isOwnMessage
+                            ? "text-blue-100"
+                            : "text-slate-500"
+                        }`}
+                >
+                    {isOwnMessage ? "You" : message.username}
+                </p>
 
-            <div className="max-w-lg rounded-2xl bg-white px-5 py-4 shadow-sm">
-
-                <div className="mb-2 flex gap-4 items-center">
-
-                    <h3 className="font-semibold text-slate-800">
-                        {message.username}
-                    </h3>
-
-                    <span className="text-xs text-slate-400">
-                        Just now
-                    </span>
-
-                </div>
-
-                <p className="leading-relaxed text-slate-700">
+                <p className="wrap-break-word">
                     {message.message}
                 </p>
 
+                <p
+                    className={`mt-1 text-xs ${isOwnMessage
+                            ? "text-blue-100"
+                            : "text-slate-400"
+                        }`}
+                >
+                    {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    })}
+                </p>
             </div>
-
         </div>
     );
 };

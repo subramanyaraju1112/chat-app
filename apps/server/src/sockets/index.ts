@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
+import { timeStamp } from "console";
 
 interface JoinChatPayload {
     username: string;
@@ -26,8 +27,9 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         });
 
         socket.on("send_message", (data) => {
-            console.log("📩 Message Received:", data);
-            io.emit("receive_message", data);
+            const message = { ...data, timestamp: new Date().toISOString() }
+            console.log("📩 Message Received:", message);
+            io.emit("receive_message", message);
         });
 
         socket.on("disconnect", () => {
