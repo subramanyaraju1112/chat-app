@@ -33,9 +33,9 @@ const MessageList = ({ username, messages }: MessageListProps) => {
 
                 <div className="space-y-5">
 
-                    {messages.map((message, index) => (
+                    {messages.map((message) => (
                         <ChatMessageItem
-                            key={index}
+                            key={message.id}
                             username={username}
                             message={message}
                         />

@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
-import { timeStamp } from "console";
+import { randomUUID } from "crypto";
 
 interface JoinChatPayload {
     username: string;
@@ -27,7 +27,12 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         });
 
         socket.on("send_message", (data) => {
-            const message = { ...data, timestamp: new Date().toISOString() }
+            const message = {
+                id: randomUUID(),
+                username: data.username,
+                message: data.message,
+                timestamp: new Date().toISOString(),
+            };
             console.log("📩 Message Received:", message);
             io.emit("receive_message", message);
         });
