@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { type ChatMessage } from "../../types/message";
 import ChatMessageItem from "./ChatMessageItem";
 
@@ -7,6 +8,14 @@ interface MessageListProps {
 }
 
 const MessageList = ({ username, messages }: MessageListProps) => {
+    const bottomRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+        });
+    }, [messages]);
+
     return (
         <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
 
@@ -31,11 +40,9 @@ const MessageList = ({ username, messages }: MessageListProps) => {
                             message={message}
                         />
                     ))}
-
+                    <div ref={bottomRef} />
                 </div>
-
             )}
-
         </div>
     );
 };
