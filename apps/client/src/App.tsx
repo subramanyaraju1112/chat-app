@@ -9,6 +9,7 @@ function App() {
   const [username, setUsername] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
 
   const handleReceiveMessage = (data: ChatMessage) => {
     setMessages((previousMessages) => [
@@ -36,14 +37,24 @@ function App() {
       setOnlineUsers(users)
     })
 
+    socket.on("user_typing", (data: { username: string }) => {
+      setTypingUser(data.username);
+    });
 
     return () => {
       socket.off("connect");
       socket.off("receive_message", handleReceiveMessage);
-      socket.off("online_users")
+      socket.off("online_users");
+      socket.off("user_typing");
       socket.disconnect();
     };
   }, [])
+
+  const handleTyping = () => {
+    socket.emit("typing", {
+      username,
+    });
+  };
 
   const handleSendMessage = (message: string) => {
     socket.emit("send_message", {
@@ -60,6 +71,8 @@ function App() {
             username={username}
             messages={messages}
             onlineUsers={onlineUsers}
+            typingUser={typingUser}
+            onTyping={handleTyping}
             onSendMessage={handleSendMessage}
           />
         </>

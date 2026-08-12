@@ -1,16 +1,24 @@
 import { useState, type ChangeEvent } from "react";
 
 interface ChatBoxProps {
+    typingUser: string | null;
+    onTyping: () => void;
     onSendMessage: (message: string) => void;
 }
 
-const ChatBox = ({ onSendMessage }: ChatBoxProps) => {
+const ChatBox = ({ typingUser, onTyping, onSendMessage }: ChatBoxProps) => {
     const [message, setMessage] = useState("");
 
     const handleOnChange = (
         event: ChangeEvent<HTMLInputElement>
     ) => {
-        setMessage(event.target.value);
+        const value = event.target.value;
+
+        setMessage(value);
+
+        if (value.trim()) {
+            onTyping();
+        }
     };
 
     const handleSendMessage = () => {
@@ -25,6 +33,12 @@ const ChatBox = ({ onSendMessage }: ChatBoxProps) => {
 
     return (
         <div className="border-t bg-white p-5">
+
+            {typingUser && (
+                <p className="mb-2 text-sm text-slate-400">
+                    {typingUser} is typing...
+                </p>
+            )}
 
             <div className="flex items-center gap-4">
 

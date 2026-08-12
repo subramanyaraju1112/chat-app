@@ -7,19 +7,23 @@ interface ChatLayoutProps {
   username: string;
   messages: ChatMessage[];
   onlineUsers: string[];
+  typingUser: string | null;
   onSendMessage: (message: string) => void;
+  onTyping: () => void;
 }
 
 const ChatLayout = ({
   username,
   messages,
   onlineUsers,
+  typingUser,
   onSendMessage,
+  onTyping,
 }: ChatLayoutProps) => {
   return (
     <div className="flex h-screen bg-slate-100">
 
-      <Sidebar onlineUsers={onlineUsers}/>
+      <Sidebar onlineUsers={onlineUsers} />
 
       <main className="flex flex-1 flex-col">
 
@@ -43,7 +47,8 @@ const ChatLayout = ({
 
         <MessageList username={username} messages={messages} />
 
-        <ChatBox onSendMessage={onSendMessage} />
+        <ChatBox onSendMessage={onSendMessage} onTyping={onTyping}
+          typingUser={typingUser} />
 
       </main>
 
