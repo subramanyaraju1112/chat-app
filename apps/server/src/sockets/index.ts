@@ -26,6 +26,18 @@ export const initializeSocket = (httpServer: HTTPServer) => {
             io.emit("online_users", [...connectedUsers.values()]);
         });
 
+        socket.on("typing", (data: { username: string }) => {
+            socket.broadcast.emit("user_typing", {
+                username: data.username,
+            });
+        });
+
+        socket.on("stop_typing", (data: { username: string }) => {
+            socket.broadcast.emit("user_stopped_typing", {
+                username: data.username,
+            });
+        });
+
         socket.on("send_message", (data) => {
             const message = {
                 id: randomUUID(),
