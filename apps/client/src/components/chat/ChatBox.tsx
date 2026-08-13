@@ -1,13 +1,23 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 interface ChatBoxProps {
     typingUser: string | null;
     onTyping: () => void;
+    onStopTyping: () => void;
     onSendMessage: (message: string) => void;
 }
 
-const ChatBox = ({ typingUser, onTyping, onSendMessage }: ChatBoxProps) => {
+const ChatBox = ({ typingUser, onTyping, onStopTyping, onSendMessage }: ChatBoxProps) => {
     const [message, setMessage] = useState("");
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleOnChange = (
         event: ChangeEvent<HTMLInputElement>
@@ -16,9 +26,19 @@ const ChatBox = ({ typingUser, onTyping, onSendMessage }: ChatBoxProps) => {
 
         setMessage(value);
 
-        if (value.trim()) {
-            onTyping();
+        if (!value.trim()) {
+            return;
         }
+
+        onTyping();
+
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+            onStopTyping();
+        }, 1000);
     };
 
     const handleSendMessage = () => {

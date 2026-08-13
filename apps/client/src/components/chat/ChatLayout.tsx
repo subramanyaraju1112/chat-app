@@ -8,6 +8,7 @@ interface ChatLayoutProps {
   messages: ChatMessage[];
   onlineUsers: string[];
   typingUser: string | null;
+  onStopTyping: () => void;
   onSendMessage: (message: string) => void;
   onTyping: () => void;
 }
@@ -19,6 +20,7 @@ const ChatLayout = ({
   typingUser,
   onSendMessage,
   onTyping,
+  onStopTyping
 }: ChatLayoutProps) => {
   return (
     <div className="flex h-screen bg-slate-100">
@@ -47,7 +49,7 @@ const ChatLayout = ({
 
         <MessageList username={username} messages={messages} />
 
-        <ChatBox onSendMessage={onSendMessage} onTyping={onTyping}
+        <ChatBox onSendMessage={onSendMessage} onTyping={onTyping} onStopTyping={onStopTyping}
           typingUser={typingUser} />
 
       </main>

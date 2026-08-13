@@ -41,17 +41,30 @@ function App() {
       setTypingUser(data.username);
     });
 
+    socket.on("user_stopped_typing", (data: { username: string }) => {
+      setTypingUser((currentUser) =>
+        currentUser === data.username ? null : currentUser
+      );
+    });
+
     return () => {
       socket.off("connect");
       socket.off("receive_message", handleReceiveMessage);
       socket.off("online_users");
       socket.off("user_typing");
+      socket.off("user_stopped_typing");
       socket.disconnect();
     };
   }, [])
 
   const handleTyping = () => {
     socket.emit("typing", {
+      username,
+    });
+  };
+
+  const handleStopTyping = () => {
+    socket.emit("stop_typing", {
       username,
     });
   };
@@ -73,6 +86,7 @@ function App() {
             onlineUsers={onlineUsers}
             typingUser={typingUser}
             onTyping={handleTyping}
+            onStopTyping={handleStopTyping}
             onSendMessage={handleSendMessage}
           />
         </>
