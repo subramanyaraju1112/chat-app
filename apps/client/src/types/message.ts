@@ -1,6 +1,7 @@
 export interface ChatMessage {
   id: string;
-  username: string;
+  type: "message" | "system";
+  username?: string;
   message: string;
   timestamp: string;
 }

@@ -21,9 +21,23 @@ export const initializeSocket = (httpServer: HTTPServer) => {
 
         socket.on("join_chat", (data: JoinChatPayload) => {
             connectedUsers.set(socket.id, data.username);
+
             console.log("Connected Users:");
             console.log(connectedUsers);
-            io.emit("online_users", [...connectedUsers.values()]);
+
+            io.emit(
+                "online_users",
+                [...connectedUsers.values()]
+            );
+
+            const systemMessage = {
+                id: randomUUID(),
+                type: "system",
+                message: `${data.username} joined the chat`,
+                timestamp: new Date().toISOString(),
+            };
+
+            io.emit("receive_message", systemMessage);
         });
 
         socket.on("typing", (data: { username: string }) => {
@@ -41,17 +55,35 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         socket.on("send_message", (data) => {
             const message = {
                 id: randomUUID(),
+                type: "message",
                 username: data.username,
                 message: data.message,
                 timestamp: new Date().toISOString(),
             };
+
             console.log("📩 Message Received:", message);
+
             io.emit("receive_message", message);
         });
 
         socket.on("disconnect", () => {
             console.log(`❌ User Disconnected: ${socket.id}`);
+
+            const username = connectedUsers.get(socket.id);
+
             connectedUsers.delete(socket.id);
+
+            if (username) {
+                const systemMessage = {
+                    id: randomUUID(),
+                    type: "system",
+                    message: `${username} left the chat`,
+                    timestamp: new Date().toISOString(),
+                };
+
+                io.emit("receive_message", systemMessage);
+            }
+
             io.emit(
                 "online_users",
                 [...connectedUsers.values()]
