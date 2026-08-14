@@ -1,15 +1,21 @@
-import { type ChatMessage } from "../../types/message";
+import type { ChatMessage } from "../../types/message";
 
 interface ChatMessageItemProps {
     username: string;
-    message: ChatMessage;
+    message: Extract<ChatMessage, { type: "message" }>;
 }
 
-const ChatMessageItem = ({ username, message }: ChatMessageItemProps) => {
+const ChatMessageItem = ({
+    username,
+    message,
+}: ChatMessageItemProps) => {
     const isOwnMessage = message.username === username;
+
     return (
         <div
-            className={`flex ${isOwnMessage ? "justify-end" : "justify-start"
+            className={`flex ${isOwnMessage
+                    ? "justify-end"
+                    : "justify-start"
                 }`}
         >
             <div
@@ -24,7 +30,9 @@ const ChatMessageItem = ({ username, message }: ChatMessageItemProps) => {
                             : "text-slate-500"
                         }`}
                 >
-                    {isOwnMessage ? "You" : message.username}
+                    {isOwnMessage
+                        ? "You"
+                        : message.username}
                 </p>
 
                 <p className="wrap-break-word">
@@ -37,7 +45,9 @@ const ChatMessageItem = ({ username, message }: ChatMessageItemProps) => {
                             : "text-slate-400"
                         }`}
                 >
-                    {new Date(message.timestamp).toLocaleTimeString([], {
+                    {new Date(
+                        message.timestamp
+                    ).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                     })}

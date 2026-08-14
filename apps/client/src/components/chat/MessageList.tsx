@@ -1,13 +1,17 @@
 import { useEffect, useRef } from "react";
-import { type ChatMessage } from "../../types/message";
+import type { ChatMessage } from "../../types/message";
 import ChatMessageItem from "./ChatMessageItem";
+import SystemMessage from "./SystemMessage";
 
 interface MessageListProps {
     username: string;
     messages: ChatMessage[];
 }
 
-const MessageList = ({ username, messages }: MessageListProps) => {
+const MessageList = ({
+    username,
+    messages,
+}: MessageListProps) => {
     const bottomRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -22,27 +26,40 @@ const MessageList = ({ username, messages }: MessageListProps) => {
             {messages.length === 0 ? (
 
                 <div className="flex h-full items-center justify-center">
-
                     <p className="text-slate-400">
                         No messages yet. Start the conversation 👋
                     </p>
-
                 </div>
 
             ) : (
 
                 <div className="space-y-5">
 
-                    {messages.map((message) => (
-                        <ChatMessageItem
-                            key={message.id}
-                            username={username}
-                            message={message}
-                        />
-                    ))}
+                    {messages.map((message) => {
+
+                        if (message.type === "system") {
+                            return (
+                                <SystemMessage
+                                    key={message.id}
+                                    message={message}
+                                />
+                            );
+                        }
+
+                        return (
+                            <ChatMessageItem
+                                key={message.id}
+                                username={username}
+                                message={message}
+                            />
+                        );
+                    })}
+
                     <div ref={bottomRef} />
+
                 </div>
             )}
+
         </div>
     );
 };

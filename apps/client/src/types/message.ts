@@ -1,7 +1,14 @@
-export interface ChatMessage {
-  id: string;
-  type: "message" | "system";
-  username?: string;
-  message: string;
-  timestamp: string;
-}
+export type ChatMessage =
+  | {
+    type: "message";
+    id: string;
+    username: string;
+    message: string;
+    timestamp: string;
+  }
+  | {
+    type: "system";
+    id: string;
+    message: string;
+    timestamp: string;
+  };
