@@ -1,21 +1,24 @@
 # Server
 
-The server is a Node.js application built with Express, TypeScript, and Socket.IO.
+The server is a Node.js application built with Express, TypeScript, Socket.IO, and MongoDB.
 
-It acts as the central authority for the chat application by managing the HTTP server, maintaining WebSocket connections, tracking connected users, generating message metadata, and broadcasting real-time events between clients.
+It acts as the central authority for the chat application by managing the HTTP server, maintaining WebSocket connections, tracking connected users, generating message metadata, handling real-time events, and providing database connectivity.
 
 ---
 
-## Tech Stack
+# Tech Stack
 
 - Node.js
 - Express
 - TypeScript
 - Socket.IO
+- MongoDB
+- Mongoose
+- dotenv
 
 ---
 
-## Responsibilities
+# Responsibilities
 
 - Start the HTTP server
 - Initialize the Socket.IO server
@@ -28,38 +31,47 @@ It acts as the central authority for the chat application by managing the HTTP s
 - Generate unique message IDs
 - Generate server-side message timestamps
 - Broadcast typing status
-- Serve REST APIs in the future
+- Generate join/leave system messages
+- Establish MongoDB connection
+- Persist chat data in MongoDB (Upcoming)
+- Serve REST APIs (Future)
 
 ---
 
 # Architecture
 
 ```text
-                     React Client
-                           │
-                           │
-                    Socket.IO Client
-                           │
+                         React Client
+                              │
+                              │
+                       Socket.IO Client
+                              │
 ══════════════════════════════════════════════
-              Persistent WebSocket
+               Persistent WebSocket
 ══════════════════════════════════════════════
-                           │
-                           ▼
-                 Node HTTP Server
-                           │
-                ┌──────────┴──────────┐
-                │                     │
-                ▼                     ▼
-            Express              Socket.IO
-            Routes                Events
-                                      │
-                     ┌────────────────┼────────────────┐
-                     │                │                │
-                     ▼                ▼                ▼
-              User Presence       Messages       Typing State
-                     │                │                │
-                     ▼                ▼                ▼
-                Map Store       Message Data      Ephemeral Events
+                              │
+                              ▼
+                    Node HTTP Server
+                              │
+                 ┌────────────┴────────────┐
+                 │                         │
+                 ▼                         ▼
+             Express                   Socket.IO
+             Routes                     Events
+                                          │
+                   ┌──────────────────────┼──────────────────────┐
+                   │                      │                      │
+                   ▼                      ▼                      ▼
+             User Presence            Messages             Typing State
+                   │                      │                      │
+                   ▼                      ▼                      ▼
+              Map Store              Message Data          Ephemeral Events
+                                          │
+                                          ▼
+                                      Mongoose
+                                          │
+                                          ▼
+                                      MongoDB
 ```
 
 ---
@@ -72,6 +84,7 @@ It acts as the central authority for the chat application by managing the HTTP s
 - Node HTTP server
 - Socket.IO attached to the HTTP server
 - CORS configuration for the React client
+- Environment variable configuration using dotenv
 
 ---
 
@@ -85,6 +98,8 @@ It acts as the central authority for the chat application by managing the HTTP s
 - Receive message broadcast
 - Typing event
 - Stop typing event
+- Join system message
+- Leave system message
 
 ---
 
@@ -124,11 +139,72 @@ When a user disconnects:
 connectedUsers.delete(socket.id);
 ```
 
-After either operation, the server broadcasts the updated user list:
+After users join or disconnect, the server broadcasts the updated user list:
 
 ```ts
 io.emit("online_users", [...connectedUsers.values()]);
 ```
+
+The Map currently represents active users connected to the current server instance.
+
+---
+
+# MongoDB
+
+MongoDB is used as the database layer for the chat application.
+
+The server uses **Mongoose** to establish and manage the MongoDB connection.
+
+## Database Connection
+
+The connection is initialized when the server starts.
+
+```text
+Server Starts
+      │
+      ▼
+Load Environment Variables
+      │
+      ▼
+Connect to MongoDB
+      │
+      ├── Success
+      │      │
+      │      ▼
+      │   Start HTTP Server
+      │
+      └── Failure
+             │
+             ▼
+        Server Startup Fails
+```
+
+The MongoDB connection is configured through the environment variable:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/socket-chat
+```
+
+The application does not hard-code database credentials or connection strings.
+
+---
+
+# Database Configuration
+
+MongoDB connection logic is separated from the application startup code.
+
+```text
+src/
+├── config/
+│   └── database.ts
+```
+
+The database configuration is responsible for:
+
+- Reading `MONGODB_URI`
+- Establishing the Mongoose connection
+- Logging successful connections
+- Handling connection failures
 
 ---
 
@@ -142,19 +218,23 @@ send_message
 
 the server creates the complete message object.
 
+A normal message contains:
+
 ```ts
 const message = {
   id: randomUUID(),
+  type: "message",
   username: data.username,
   message: data.message,
   timestamp: new Date().toISOString(),
 };
 ```
 
-The server is therefore responsible for generating:
+The server is responsible for generating:
 
 - Unique message ID
 - Message timestamp
+- Message type
 
 The completed message is then broadcast:
 
@@ -164,29 +244,179 @@ io.emit("receive_message", message);
 
 ---
 
-# Message Structure
+# Message Types
+
+The application currently supports two message types:
+
+```text
+message
+system
+```
+
+## Normal Message
+
+A normal user-generated message contains:
 
 ```ts
-interface ChatMessage {
-  id: string;
-  username: string;
-  message: string;
-  timestamp: string;
+{
+  type: "message",
+  id: "...",
+  username: "Subramanya",
+  message: "Hello Socket.IO 👋",
+  timestamp: "..."
+}
+```
+
+## System Message
+
+A system-generated event contains:
+
+```ts
+{
+  type: "system",
+  id: "...",
+  message: "Alice joined the chat",
+  timestamp: "..."
+}
+```
+
+System messages are generated by the server for application events such as:
+
+- User joining the chat
+- User leaving the chat
+
+---
+
+# Message Structure
+
+The client-side message model uses a discriminated union:
+
+```ts
+export type ChatMessage =
+  | {
+      type: "message";
+      id: string;
+      username: string;
+      message: string;
+      timestamp: string;
+    }
+  | {
+      type: "system";
+      id: string;
+      message: string;
+      timestamp: string;
+    };
+```
+
+This allows the application to distinguish between:
+
+```text
+type === "message"
+        │
+        ▼
+Normal Chat Message
+```
+
+and:
+
+```text
+type === "system"
+        │
+        ▼
+System Notification
+```
+
+---
+
+# Join Chat
+
+When a user joins the chat:
+
+```text
+Client
+   │
+   ▼
+join_chat
+   │
+   ▼
+Server
+   │
+   ├── Store socket.id → username
+   │
+   ├── Broadcast online_users
+   │
+   └── Create system message
+            │
+            ▼
+       receive_message
+            │
+            ▼
+      All Connected Clients
+```
+
+The server creates a system message:
+
+```ts
+{
+  id: randomUUID(),
+  type: "system",
+  message: `${username} joined the chat`,
+  timestamp: new Date().toISOString()
 }
 ```
 
 Example:
 
-```json
+```text
+────────────────────────────────
+      Alice joined the chat
+────────────────────────────────
+```
+
+---
+
+# Disconnect Handling
+
+When a client disconnects:
+
+```text
+Client
+   │
+   ▼
+disconnect
+   │
+   ▼
+Server
+   │
+   ├── Get username from socket.id
+   │
+   ├── Remove user from Map
+   │
+   ├── Create leave system message
+   │
+   └── Broadcast updated online_users
+```
+
+The username must be retrieved before deleting the socket from the Map:
+
+```ts
+const username = connectedUsers.get(socket.id);
+
+connectedUsers.delete(socket.id);
+```
+
+If the username exists, the server creates:
+
+```ts
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "username": "Subramanya",
-  "message": "Hello Socket.IO 👋",
-  "timestamp": "2026-08-13T15:30:00.000Z"
+  id: randomUUID(),
+  type: "system",
+  message: `${username} left the chat`,
+  timestamp: new Date().toISOString()
 }
 ```
 
-Using server-generated IDs and timestamps ensures that all clients receive the same message metadata.
+This is then broadcast to the remaining clients.
 
 ---
 
@@ -194,7 +424,9 @@ Using server-generated IDs and timestamps ensures that all clients receive the s
 
 The server treats typing status as **ephemeral real-time state**.
 
-Typing information is not persisted as a chat message.
+Typing information is not treated as a persistent chat message.
+
+---
 
 ## User Starts Typing
 
@@ -236,42 +468,6 @@ This allows other clients to remove the typing indicator.
 
 ---
 
-# Typing Event Flow
-
-```text
-Client A
-   │
-   │ typing
-   ▼
-Server
-   │
-   │ socket.broadcast.emit()
-   ▼
-Client B / Client C
-   │
-   ▼
-"Alice is typing..."
-```
-
-When typing stops:
-
-```text
-Client A
-   │
-   │ stop_typing
-   ▼
-Server
-   │
-   │ socket.broadcast.emit()
-   ▼
-Client B / Client C
-   │
-   ▼
-Remove typing indicator
-```
-
----
-
 # Why `socket.broadcast.emit()`?
 
 For typing events, the sender doesn't need to receive their own typing status.
@@ -303,13 +499,13 @@ Every connected client
     except sender
 ```
 
-For chat messages, we use:
+For chat messages and system messages, we use:
 
 ```ts
-io.emit("receive_message", message);
+io.emit(...)
 ```
 
-because the sender also needs to receive the broadcasted message.
+because every connected client should receive them.
 
 ---
 
@@ -321,7 +517,7 @@ because the sender also needs to receive the broadcasted message.
 | `join_chat`           | Client → Server | Registers the user's username                       |
 | `online_users`        | Server → Client | Broadcasts the current online users                 |
 | `send_message`        | Client → Server | Receives a message from a client                    |
-| `receive_message`     | Server → Client | Broadcasts a message to connected clients           |
+| `receive_message`     | Server → Client | Broadcasts a message or system message              |
 | `typing`              | Client → Server | Indicates that a user is typing                     |
 | `user_typing`         | Server → Client | Notifies other clients that a user is typing        |
 | `stop_typing`         | Client → Server | Indicates that a user stopped typing                |
@@ -343,14 +539,17 @@ join_chat
    ▼
 Server
    │
-   ▼
-connectedUsers.set()
+   ├── connectedUsers.set()
    │
-   ▼
-Broadcast online_users
+   ├── Broadcast online_users
    │
-   ▼
-Every Connected Client
+   └── Create system message
+            │
+            ▼
+       receive_message
+            │
+            ▼
+     Every Connected Client
 ```
 
 ---
@@ -366,14 +565,16 @@ disconnect
    ▼
 Server
    │
-   ▼
-connectedUsers.delete(socket.id)
+   ├── Get username
    │
-   ▼
-Broadcast online_users
+   ├── connectedUsers.delete()
    │
-   ▼
-Every Connected Client
+   ├── Create system message
+   │
+   └── Broadcast online_users
+            │
+            ▼
+     Remaining Clients
 ```
 
 ---
@@ -392,6 +593,8 @@ Server
    ├── Generate message ID
    │
    ├── Generate timestamp
+   │
+   ├── Set type = "message"
    │
    ▼
 receive_message
@@ -422,10 +625,13 @@ Other Clients
 
 ---
 
-# Server Lifecycle
+# Server Startup Flow
 
 ```text
 Server Starts
+      │
+      ▼
+Load Environment Variables
       │
       ▼
 Initialize Express
@@ -437,22 +643,17 @@ Create HTTP Server
 Initialize Socket.IO
       │
       ▼
-Wait for Client Connections
+Connect to MongoDB
       │
-      ▼
-Client Connects
+      ├── Success
+      │      │
+      │      ▼
+      │   Start HTTP Server
       │
-      ▼
-Socket Connection Established
-      │
-      ▼
-Listen for Socket Events
-      │
-      ├── join_chat
-      ├── send_message
-      ├── typing
-      ├── stop_typing
-      └── disconnect
+      └── Failure
+             │
+             ▼
+        Exit Application
 ```
 
 ---
@@ -467,12 +668,15 @@ src/
 ├── sockets/
 │   └── index.ts
 │
+├── config/
+│   └── database.ts
+│
 ├── controllers/
 ├── routes/
 ├── services/
 ├── middleware/
 ├── utils/
-├── config/
+├── models/
 └── types/
 ```
 
@@ -488,6 +692,10 @@ Socket.IO Server
 │
 ├── Express App
 │
+├── MongoDB
+│      │
+│      └── Mongoose
+│
 ├── Connected Users
 │      │
 │      ├── socket.id → username
@@ -497,6 +705,7 @@ Socket.IO Server
 │      │
 │      ├── Generate ID
 │      ├── Generate Timestamp
+│      ├── Determine Message Type
 │      └── Broadcast Message
 │
 └── Socket Events
@@ -522,6 +731,21 @@ Socket.IO Server
 ```bash
 pnpm install
 ```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the server root:
+
+```env
+PORT=3000
+MONGODB_URI=mongodb://127.0.0.1:27017/socket-chat
+```
+
+For production, use the appropriate MongoDB connection string.
+
+Do not commit `.env` to Git.
 
 ---
 
@@ -581,9 +805,15 @@ Runs the compiled production build.
 - In-memory state management using `Map`
 - Server-generated message IDs
 - Server-generated timestamps
+- Normal and system message types
+- Join/leave system messages
 - Real-time typing events
 - `socket.broadcast.emit()` usage
 - Separation of persistent and ephemeral events
+- MongoDB connection
+- Mongoose integration
+- Environment-based database configuration
+- Database-first server startup
 
 ---
 
@@ -595,6 +825,8 @@ Runs the compiled production build.
 - In-memory state management for active connections
 - Server-authoritative message metadata
 - Separation of persistent messages and ephemeral events
+- Separation of socket communication and database logic
+- Environment-based configuration
 - Clean separation of concerns
 - Scalable foundation for distributed communication
 
@@ -624,23 +856,33 @@ Runs the compiled production build.
 
 ✅ Server-generated Message Timestamps
 
+✅ Normal Message Type
+
+✅ System Message Type
+
+✅ Join System Messages
+
+✅ Leave System Messages
+
 ✅ Typing Event
 
 ✅ Stop Typing Event
 
 ✅ Real-time Typing Indicator
 
-🚧 Join/Leave Notifications
+✅ MongoDB Connection
+
+✅ Mongoose Setup
 
 🚧 Message Persistence
+
+🚧 Message History
 
 🚧 Chat Rooms
 
 🚧 Private Messaging
 
 🚧 Authentication
-
-🚧 MongoDB Integration
 
 🚧 Redis Pub/Sub
 
@@ -652,12 +894,12 @@ Runs the compiled production build.
 
 # Upcoming Features
 
-- Join and leave notifications
 - MongoDB message persistence
+- Message history
 - Chat rooms using Socket.IO rooms
 - Private messaging
 - JWT authentication
-- Message history
+- User authentication and authorization
 - Redis Pub/Sub
 - Socket.IO Redis Adapter
 - Horizontal scaling
