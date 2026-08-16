@@ -20,3 +20,10 @@ export const createMessage = async ({
 
     return newMessage;
 };
+
+export const getMessages = async () => {
+    return Message.find()
+        .sort({ timestamp: 1 })
+        .limit(50)
+        .lean();
+};

@@ -1,7 +1,7 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
 import { randomUUID } from "crypto";
-import { createMessage } from "../services/message.service.js";
+import { createMessage, getMessages } from "../services/message.service.js";
 
 interface JoinChatPayload {
     username: string;
@@ -20,25 +20,31 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     io.on("connection", (socket) => {
         console.log(`✅ User Connected: ${socket.id}`);
 
-        socket.on("join_chat", (data: JoinChatPayload) => {
-            connectedUsers.set(socket.id, data.username);
+        socket.on("join_chat", async (data: JoinChatPayload) => {
+            try {
+                connectedUsers.set(socket.id, data.username);
 
-            console.log("Connected Users:");
-            console.log(connectedUsers);
+                console.log(`${data.username} joined the chat`);
 
-            io.emit(
-                "online_users",
-                [...connectedUsers.values()]
-            );
+                io.emit(
+                    "online_users",
+                    [...connectedUsers.values()]
+                );
 
-            const systemMessage = {
-                id: randomUUID(),
-                type: "system",
-                message: `${data.username} joined the chat`,
-                timestamp: new Date().toISOString(),
-            };
+                const messages = await getMessages();
 
-            io.emit("receive_message", systemMessage);
+                const formattedMessages = messages.map((message) => ({
+                    id: message.id,
+                    type: message.type,
+                    username: message.username,
+                    message: message.message,
+                    timestamp: message.timestamp.toISOString(),
+                }));
+
+                socket.emit("message_history", formattedMessages);
+            } catch (error) {
+                console.error("❌ Failed to load message history:", error);
+            }
         });
 
         socket.on("typing", (data: { username: string }) => {
