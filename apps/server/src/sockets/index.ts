@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
 import { randomUUID } from "crypto";
+import { createMessage } from "../services/message.service.js";
 
 interface JoinChatPayload {
     username: string;
@@ -52,18 +53,25 @@ export const initializeSocket = (httpServer: HTTPServer) => {
             });
         });
 
-        socket.on("send_message", (data) => {
-            const message = {
-                id: randomUUID(),
-                type: "message",
-                username: data.username,
-                message: data.message,
-                timestamp: new Date().toISOString(),
-            };
+        socket.on("send_message", async (data) => {
+            try {
+                const message = await createMessage({
+                    username: data.username,
+                    message: data.message,
+                });
 
-            console.log("📩 Message Received:", message);
+                console.log("📩 Message Received:", message);
 
-            io.emit("receive_message", message);
+                io.emit("receive_message", {
+                    id: message.id,
+                    type: message.type,
+                    username: message.username,
+                    message: message.message,
+                    timestamp: message.timestamp.toISOString(),
+                });
+            } catch (error) {
+                console.error("❌ Failed to save message:", error);
+            }
         });
 
         socket.on("disconnect", () => {
