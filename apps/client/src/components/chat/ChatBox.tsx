@@ -1,23 +1,26 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+    useEffect,
+    useRef,
+    useState,
+    type ChangeEvent,
+} from "react";
 
 interface ChatBoxProps {
-    typingUser: string | null;
     onTyping: () => void;
     onStopTyping: () => void;
     onSendMessage: (message: string) => void;
 }
 
-const ChatBox = ({ typingUser, onTyping, onStopTyping, onSendMessage }: ChatBoxProps) => {
+const ChatBox = ({
+    onTyping,
+    onStopTyping,
+    onSendMessage,
+}: ChatBoxProps) => {
     const [message, setMessage] = useState("");
-    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    useEffect(() => {
-        return () => {
-            if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
-            }
-        };
-    }, []);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null
+    );
 
     const handleOnChange = (
         event: ChangeEvent<HTMLInputElement>
@@ -27,6 +30,7 @@ const ChatBox = ({ typingUser, onTyping, onStopTyping, onSendMessage }: ChatBoxP
         setMessage(value);
 
         if (!value.trim()) {
+            onStopTyping();
             return;
         }
 
@@ -46,24 +50,34 @@ const ChatBox = ({ typingUser, onTyping, onStopTyping, onSendMessage }: ChatBoxP
 
         if (!trimmedMessage) return;
 
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        onStopTyping();
+
         onSendMessage(trimmedMessage);
 
         setMessage("");
     };
 
+    useEffect(() => {
+        return () => {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+
+            onStopTyping();
+        };
+    }, []);
+
     return (
         <div className="border-t bg-white p-5">
-
-            {typingUser && (
-                <p className="mb-2 text-sm text-slate-400">
-                    {typingUser} is typing...
-                </p>
-            )}
-
             <div className="flex items-center gap-4">
 
                 <input
                     className="flex-1 rounded-xl border border-slate-300 bg-slate-50 px-5 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    type="text"
                     placeholder="Type your message..."
                     value={message}
                     onChange={handleOnChange}
@@ -82,7 +96,6 @@ const ChatBox = ({ typingUser, onTyping, onStopTyping, onSendMessage }: ChatBoxP
                 </button>
 
             </div>
-
         </div>
     );
 };

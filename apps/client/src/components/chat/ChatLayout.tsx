@@ -8,9 +8,9 @@ interface ChatLayoutProps {
   messages: ChatMessage[];
   onlineUsers: string[];
   typingUser: string | null;
+  onTyping: () => void;
   onStopTyping: () => void;
   onSendMessage: (message: string) => void;
-  onTyping: () => void;
 }
 
 const ChatLayout = ({
@@ -18,9 +18,9 @@ const ChatLayout = ({
   messages,
   onlineUsers,
   typingUser,
-  onSendMessage,
   onTyping,
-  onStopTyping
+  onStopTyping,
+  onSendMessage,
 }: ChatLayoutProps) => {
   return (
     <div className="flex h-screen bg-slate-100">
@@ -49,8 +49,17 @@ const ChatLayout = ({
 
         <MessageList username={username} messages={messages} />
 
-        <ChatBox onSendMessage={onSendMessage} onTyping={onTyping} onStopTyping={onStopTyping}
-          typingUser={typingUser} />
+        {typingUser && (
+          <div className="border-t bg-white px-6 py-2">
+            <p className="text-sm text-slate-500">
+              {typingUser} is typing...
+            </p>
+          </div>
+        )}
+
+        <ChatBox onSendMessage={onSendMessage}
+          onTyping={onTyping}
+          onStopTyping={onStopTyping} />
 
       </main>
 
