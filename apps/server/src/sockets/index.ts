@@ -1,13 +1,33 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
 import { randomUUID } from "crypto";
-import { createMessage, getMessages } from "../services/message.service.js";
+
+import {
+    createMessage,
+    getMessages,
+} from "../services/message.service.js";
+
+interface JoinRoomPayload {
+    room: string;
+}
 
 interface JoinChatPayload {
     username: string;
 }
 
+interface SendMessagePayload {
+    username: string;
+    message: string;
+    room: string;
+}
+
+interface TypingPayload {
+    username: string;
+    room: string;
+}
+
 const connectedUsers = new Map<string, string>();
+const connectedUserRooms = new Map<string, string>();
 
 export const initializeSocket = (httpServer: HTTPServer) => {
     const io = new Server(httpServer, {
@@ -20,82 +40,176 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     io.on("connection", (socket) => {
         console.log(`✅ User Connected: ${socket.id}`);
 
-        socket.on("join_chat", async (data: JoinChatPayload) => {
-            try {
-                connectedUsers.set(socket.id, data.username);
+        // -------------------------
+        // Join Chat
+        // -------------------------
 
-                console.log(`${data.username} joined the chat`);
+        socket.on(
+            "join_chat",
+            (data: JoinChatPayload) => {
+                connectedUsers.set(
+                    socket.id,
+                    data.username
+                );
+
+                console.log(
+                    `${data.username} joined the chat`
+                );
 
                 io.emit(
                     "online_users",
                     [...connectedUsers.values()]
                 );
-
-                const messages = await getMessages();
-
-                const formattedMessages = messages.map((message) => ({
-                    id: message.id,
-                    type: message.type,
-                    username: message.username,
-                    message: message.message,
-                    timestamp: message.timestamp.toISOString(),
-                }));
-
-                socket.emit("message_history", formattedMessages);
-            } catch (error) {
-                console.error("❌ Failed to load message history:", error);
             }
-        });
+        );
 
-        socket.on("typing", (data: { username: string }) => {
-            socket.broadcast.emit("user_typing", {
-                username: data.username,
-            });
-        });
+        // -------------------------
+        // Join Room
+        // -------------------------
 
-        socket.on("stop_typing", (data: { username: string }) => {
-            socket.broadcast.emit("user_stopped_typing", {
-                username: data.username,
-            });
-        });
+        socket.on(
+            "join_room",
+            async ({ room }: JoinRoomPayload) => {
+                try {
+                    socket.join(room);
 
-        socket.on("send_message", async (data) => {
-            try {
-                const message = await createMessage({
-                    username: data.username,
-                    message: data.message,
-                });
+                    connectedUserRooms.set(socket.id, room);
 
-                console.log("📩 Message Received:", message);
+                    console.log(
+                        `${socket.id} joined room: ${room}`
+                    );
 
-                io.emit("receive_message", {
-                    id: message.id,
-                    type: message.type,
-                    username: message.username,
-                    message: message.message,
-                    timestamp: message.timestamp.toISOString(),
-                });
-            } catch (error) {
-                console.error("❌ Failed to save message:", error);
+                    const messages = await getMessages(room);
+
+                    const formattedMessages = messages.map(
+                        (message) => ({
+                            id: message.id,
+                            type: message.type,
+                            username: message.username,
+                            message: message.message,
+                            room: message.room,
+                            timestamp:
+                                message.timestamp.toISOString(),
+                        })
+                    );
+
+                    socket.emit(
+                        "message_history",
+                        formattedMessages
+                    );
+                } catch (error) {
+                    console.error(
+                        "❌ Failed to join room:",
+                        error
+                    );
+                }
             }
-        });
+        );
+
+        // -------------------------
+        // Typing
+        // -------------------------
+
+        socket.on(
+            "typing",
+            (data: TypingPayload) => {
+                socket.to(data.room).emit(
+                    "user_typing",
+                    {
+                        username: data.username,
+                    }
+                );
+            }
+        );
+
+        // -------------------------
+        // Stop Typing
+        // -------------------------
+
+        socket.on(
+            "stop_typing",
+            (data: TypingPayload) => {
+                socket.to(data.room).emit(
+                    "user_stopped_typing",
+                    {
+                        username: data.username,
+                    }
+                );
+            }
+        );
+
+        // -------------------------
+        // Send Message
+        // -------------------------
+
+        socket.on(
+            "send_message",
+            async (data: SendMessagePayload) => {
+                try {
+                    const message =
+                        await createMessage({
+                            username: data.username,
+                            message: data.message,
+                            room: data.room,
+                        });
+
+                    console.log(
+                        "📩 Message Received:",
+                        message
+                    );
+
+                    io.to(data.room).emit(
+                        "receive_message",
+                        {
+                            id: message.id,
+                            type: message.type,
+                            username: message.username,
+                            message: message.message,
+                            room: message.room,
+                            timestamp:
+                                message.timestamp.toISOString(),
+                        }
+                    );
+                } catch (error) {
+                    console.error(
+                        "❌ Failed to save message:",
+                        error
+                    );
+                }
+            }
+        );
+
+        // -------------------------
+        // Disconnect
+        // -------------------------
 
         socket.on("disconnect", () => {
-            console.log(`❌ User Disconnected: ${socket.id}`);
+            console.log(
+                `❌ User Disconnected: ${socket.id}`
+            );
 
-            const username = connectedUsers.get(socket.id);
+            const username =
+                connectedUsers.get(socket.id);
+
+            const room =
+                connectedUserRooms.get(socket.id);
 
             connectedUsers.delete(socket.id);
+            connectedUserRooms.delete(socket.id);
 
-            if (username) {
+            if (username && room) {
                 const systemMessage = {
                     id: randomUUID(),
                     type: "system",
                     message: `${username} left the chat`,
+                    room,
                     timestamp: new Date().toISOString(),
                 };
 
-                io.emit("receive_message", systemMessage);
+                io.to(room).emit(
+                    "receive_message",
+                    systemMessage
+                );
             }
 
             io.emit(

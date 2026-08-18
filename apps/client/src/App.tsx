@@ -7,6 +7,7 @@ import ChatLayout from "./components/chat/ChatLayout";
 function App() {
   const [isJoined, setIsJoined] = useState(false);
   const [username, setUsername] = useState("");
+  const room = "general";
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
@@ -25,6 +26,10 @@ function App() {
       username,
     });
 
+    socket.emit("join_room", {
+      room: "general",
+    });
+
     setIsJoined(true);
   };
 
@@ -35,32 +40,49 @@ function App() {
       console.log("✅ Connected:", socket.id);
     });
 
-    socket.on("receive_message", handleReceiveMessage);
+    socket.on(
+      "receive_message",
+      handleReceiveMessage
+    );
 
-    socket.on("online_users", (users: string[]) => {
-      setOnlineUsers(users);
-    });
+    socket.on(
+      "online_users",
+      (users: string[]) => {
+        setOnlineUsers(users);
+      }
+    );
 
-    socket.on("message_history", (messages: ChatMessage[]) => {
-      setMessages(messages);
-    });
+    socket.on(
+      "message_history",
+      (messages: ChatMessage[]) => {
+        setMessages(messages);
+      }
+    );
 
-    socket.on("user_typing", ({ username }: { username: string }) => {
-      setTypingUser(username);
-    });
+    socket.on(
+      "user_typing",
+      ({ username }: { username: string }) => {
+        setTypingUser(username);
+      }
+    );
 
     socket.on(
       "user_stopped_typing",
       ({ username }: { username: string }) => {
         setTypingUser((currentUser) =>
-          currentUser === username ? null : currentUser
+          currentUser === username
+            ? null
+            : currentUser
         );
       }
     );
 
     return () => {
       socket.off("connect");
-      socket.off("receive_message", handleReceiveMessage);
+      socket.off(
+        "receive_message",
+        handleReceiveMessage
+      );
       socket.off("online_users");
       socket.off("message_history");
       socket.off("user_typing");
@@ -73,12 +95,14 @@ function App() {
   const handleTyping = () => {
     socket.emit("typing", {
       username,
+      room,
     });
   };
 
   const handleStopTyping = () => {
     socket.emit("stop_typing", {
       username,
+      room,
     });
   };
 
@@ -86,6 +110,7 @@ function App() {
     socket.emit("send_message", {
       username,
       message,
+      room,
     });
   };
 
