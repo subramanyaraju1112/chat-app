@@ -5,6 +5,7 @@ export interface IMessage extends Document {
     type: "message" | "system";
     username?: string;
     message: string;
+    room: string;
     timestamp: Date;
 }
 
@@ -28,6 +29,12 @@ const messageSchema = new Schema<IMessage>(
         },
 
         message: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+
+        room: {
             type: String,
             required: true,
             trim: true,

@@ -4,17 +4,20 @@ import { Message } from "../models/message.js";
 interface CreateMessageInput {
     username: string;
     message: string;
+    room: string;
 }
 
 export const createMessage = async ({
     username,
     message,
+    room,
 }: CreateMessageInput) => {
     const newMessage = await Message.create({
         id: randomUUID(),
         type: "message",
         username,
         message,
+        room,
         timestamp: new Date(),
     });
 
