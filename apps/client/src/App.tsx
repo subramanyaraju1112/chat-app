@@ -7,7 +7,7 @@ import ChatLayout from "./components/chat/ChatLayout";
 function App() {
   const [isJoined, setIsJoined] = useState(false);
   const [username, setUsername] = useState("");
-  const room = "general";
+  const [room, setRoom] = useState("general");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
@@ -27,7 +27,7 @@ function App() {
     });
 
     socket.emit("join_room", {
-      room: "general",
+      room,
     });
 
     setIsJoined(true);
@@ -79,10 +79,12 @@ function App() {
 
     return () => {
       socket.off("connect");
+
       socket.off(
         "receive_message",
         handleReceiveMessage
       );
+
       socket.off("online_users");
       socket.off("message_history");
       socket.off("user_typing");
@@ -91,6 +93,18 @@ function App() {
       socket.disconnect();
     };
   }, []);
+
+  const handleRoomChange = (newRoom: string) => {
+    if (newRoom === room) return;
+
+    setRoom(newRoom);
+    setMessages([]);
+    setTypingUser(null);
+
+    socket.emit("join_room", {
+      room: newRoom,
+    });
+  };
 
   const handleTyping = () => {
     socket.emit("typing", {
@@ -121,9 +135,11 @@ function App() {
       ) : (
         <ChatLayout
           username={username}
+          room={room}
           messages={messages}
           onlineUsers={onlineUsers}
           typingUser={typingUser}
+          onRoomChange={handleRoomChange}
           onTyping={handleTyping}
           onStopTyping={handleStopTyping}
           onSendMessage={handleSendMessage}

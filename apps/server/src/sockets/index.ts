@@ -71,6 +71,17 @@ export const initializeSocket = (httpServer: HTTPServer) => {
             "join_room",
             async ({ room }: JoinRoomPayload) => {
                 try {
+                    const previousRoom =
+                        connectedUserRooms.get(socket.id);
+
+                    if (previousRoom && previousRoom !== room) {
+                        socket.leave(previousRoom);
+
+                        console.log(
+                            `${socket.id} left room: ${previousRoom}`
+                        );
+                    }
+
                     socket.join(room);
 
                     connectedUserRooms.set(socket.id, room);
