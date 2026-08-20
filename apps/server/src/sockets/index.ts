@@ -18,12 +18,10 @@ interface JoinChatPayload {
 interface SendMessagePayload {
     username: string;
     message: string;
-    room: string;
 }
 
 interface TypingPayload {
     username: string;
-    room: string;
 }
 
 const connectedUsers = new Map<string, string>();
@@ -161,7 +159,14 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         socket.on(
             "typing",
             (data: TypingPayload) => {
-                socket.to(data.room).emit(
+                const room =
+                    connectedUserRooms.get(socket.id);
+
+                if (!room) {
+                    return;
+                }
+
+                socket.to(room).emit(
                     "user_typing",
                     {
                         username: data.username,
@@ -177,7 +182,14 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         socket.on(
             "stop_typing",
             (data: TypingPayload) => {
-                socket.to(data.room).emit(
+                const room =
+                    connectedUserRooms.get(socket.id);
+
+                if (!room) {
+                    return;
+                }
+
+                socket.to(room).emit(
                     "user_stopped_typing",
                     {
                         username: data.username,
@@ -194,11 +206,22 @@ export const initializeSocket = (httpServer: HTTPServer) => {
             "send_message",
             async (data: SendMessagePayload) => {
                 try {
+                    const room =
+                        connectedUserRooms.get(socket.id);
+
+                    if (!room) {
+                        console.error(
+                            `❌ User ${socket.id} is not in a room`
+                        );
+
+                        return;
+                    }
+
                     const message =
                         await createMessage({
                             username: data.username,
                             message: data.message,
-                            room: data.room,
+                            room,
                         });
 
                     console.log(
@@ -206,7 +229,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
                         message
                     );
 
-                    io.to(data.room).emit(
+                    io.to(room).emit(
                         "receive_message",
                         {
                             id: message.id,
