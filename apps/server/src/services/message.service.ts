@@ -7,6 +7,11 @@ interface CreateMessageInput {
     room: string;
 }
 
+interface CreateSystemMessageInput {
+    message: string;
+    room: string;
+}
+
 export const createMessage = async ({
     username,
     message,
@@ -16,6 +21,21 @@ export const createMessage = async ({
         id: randomUUID(),
         type: "message",
         username,
+        message,
+        room,
+        timestamp: new Date(),
+    });
+
+    return newMessage;
+};
+
+export const createSystemMessage = async ({
+    message,
+    room,
+}: CreateSystemMessageInput) => {
+    const newMessage = await Message.create({
+        id: randomUUID(),
+        type: "system",
         message,
         room,
         timestamp: new Date(),

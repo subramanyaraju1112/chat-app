@@ -1,9 +1,9 @@
 import { Server } from "socket.io";
 import { Server as HTTPServer } from "http";
-import { randomUUID } from "crypto";
 
 import {
     createMessage,
+    createSystemMessage,
     getMessages,
 } from "../services/message.service.js";
 
@@ -74,7 +74,13 @@ export const initializeSocket = (httpServer: HTTPServer) => {
                     const previousRoom =
                         connectedUserRooms.get(socket.id);
 
-                    if (previousRoom && previousRoom !== room) {
+                    // Already in this room
+                    if (previousRoom === room) {
+                        return;
+                    }
+
+                    // Leave previous room
+                    if (previousRoom) {
                         socket.leave(previousRoom);
 
                         console.log(
@@ -82,18 +88,24 @@ export const initializeSocket = (httpServer: HTTPServer) => {
                         );
                     }
 
+                    // Join new room
                     socket.join(room);
 
-                    connectedUserRooms.set(socket.id, room);
+                    connectedUserRooms.set(
+                        socket.id,
+                        room
+                    );
 
                     console.log(
                         `${socket.id} joined room: ${room}`
                     );
 
-                    const messages = await getMessages(room);
+                    // Load room history
+                    const messages =
+                        await getMessages(room);
 
-                    const formattedMessages = messages.map(
-                        (message) => ({
+                    const formattedMessages =
+                        messages.map((message) => ({
                             id: message.id,
                             type: message.type,
                             username: message.username,
@@ -101,13 +113,38 @@ export const initializeSocket = (httpServer: HTTPServer) => {
                             room: message.room,
                             timestamp:
                                 message.timestamp.toISOString(),
-                        })
-                    );
+                        }));
 
                     socket.emit(
                         "message_history",
                         formattedMessages
                     );
+
+                    // Create join notification
+                    const username =
+                        connectedUsers.get(socket.id);
+
+                    if (username) {
+                        const systemMessage =
+                            await createSystemMessage({
+                                message: `${username} joined the chat`,
+                                room,
+                            });
+
+                        io.to(room).emit(
+                            "receive_message",
+                            {
+                                id: systemMessage.id,
+                                type: systemMessage.type,
+                                message:
+                                    systemMessage.message,
+                                room:
+                                    systemMessage.room,
+                                timestamp:
+                                    systemMessage.timestamp.toISOString(),
+                            }
+                        );
+                    }
                 } catch (error) {
                     console.error(
                         "❌ Failed to join room:",
@@ -174,8 +211,10 @@ export const initializeSocket = (httpServer: HTTPServer) => {
                         {
                             id: message.id,
                             type: message.type,
-                            username: message.username,
-                            message: message.message,
+                            username:
+                                message.username,
+                            message:
+                                message.message,
                             room: message.room,
                             timestamp:
                                 message.timestamp.toISOString(),
@@ -194,40 +233,60 @@ export const initializeSocket = (httpServer: HTTPServer) => {
         // Disconnect
         // -------------------------
 
-        socket.on("disconnect", () => {
-            console.log(
-                `❌ User Disconnected: ${socket.id}`
-            );
+        socket.on(
+            "disconnect",
+            async () => {
+                console.log(
+                    `❌ User Disconnected: ${socket.id}`
+                );
 
-            const username =
-                connectedUsers.get(socket.id);
+                const username =
+                    connectedUsers.get(socket.id);
 
-            const room =
-                connectedUserRooms.get(socket.id);
+                const room =
+                    connectedUserRooms.get(socket.id);
 
-            connectedUsers.delete(socket.id);
-            connectedUserRooms.delete(socket.id);
+                connectedUsers.delete(socket.id);
+                connectedUserRooms.delete(socket.id);
 
-            if (username && room) {
-                const systemMessage = {
-                    id: randomUUID(),
-                    type: "system",
-                    message: `${username} left the chat`,
-                    room,
-                    timestamp: new Date().toISOString(),
-                };
+                // Persist leave notification
+                if (username && room) {
+                    try {
+                        const systemMessage =
+                            await createSystemMessage({
+                                message: `${username} left the chat`,
+                                room,
+                            });
 
-                io.to(room).emit(
-                    "receive_message",
-                    systemMessage
+                        io.to(room).emit(
+                            "receive_message",
+                            {
+                                id:
+                                    systemMessage.id,
+                                type:
+                                    systemMessage.type,
+                                message:
+                                    systemMessage.message,
+                                room:
+                                    systemMessage.room,
+                                timestamp:
+                                    systemMessage.timestamp.toISOString(),
+                            }
+                        );
+                    } catch (error) {
+                        console.error(
+                            "❌ Failed to save leave message:",
+                            error
+                        );
+                    }
+                }
+
+                io.emit(
+                    "online_users",
+                    [...connectedUsers.values()]
                 );
             }
-
-            io.emit(
-                "online_users",
-                [...connectedUsers.values()]
-            );
-        });
+        );
     });
 
     return io;
