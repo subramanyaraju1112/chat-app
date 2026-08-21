@@ -2,7 +2,7 @@
 
 The server is a Node.js application built with Express, TypeScript, Socket.IO, and MongoDB.
 
-It acts as the central authority for the chat application by managing the HTTP server, maintaining WebSocket connections, tracking connected users, generating message metadata, handling real-time events, and providing database connectivity.
+It acts as the central authority for the chat application by managing the HTTP server, maintaining WebSocket connections, tracking connected users, managing Socket.IO rooms, handling real-time events, persisting messages, loading message history, and managing database connectivity.
 
 ---
 
@@ -25,16 +25,20 @@ It acts as the central authority for the chat application by managing the HTTP s
 - Accept incoming client connections
 - Handle real-time socket events
 - Track connected users
+- Track the current room of each connected socket
+- Manage Socket.IO room membership
 - Remove disconnected users
 - Broadcast online user updates
 - Receive and broadcast chat messages
 - Generate unique message IDs
 - Generate server-side message timestamps
+- Persist messages in MongoDB
+- Load room-specific message history
+- Generate and persist system messages
 - Broadcast typing status
-- Generate join/leave system messages
+- Route events to the user's current room
 - Establish MongoDB connection
-- Persist chat data in MongoDB (Upcoming)
-- Serve REST APIs (Future)
+- Provide a foundation for future REST APIs
 
 ---
 
@@ -46,32 +50,38 @@ It acts as the central authority for the chat application by managing the HTTP s
                               │
                        Socket.IO Client
                               │
+                              │
 ══════════════════════════════════════════════
-               Persistent WebSocket
+             Persistent WebSocket Connection
 ══════════════════════════════════════════════
                               │
                               ▼
-                    Node HTTP Server
+                       Node HTTP Server
                               │
                  ┌────────────┴────────────┐
                  │                         │
                  ▼                         ▼
              Express                   Socket.IO
              Routes                     Events
-                                          │
-                   ┌──────────────────────┼──────────────────────┐
-                   │                      │                      │
-                   ▼                      ▼                      ▼
-             User Presence            Messages             Typing State
-                   │                      │                      │
-                   ▼                      ▼                      ▼
-              Map Store              Message Data          Ephemeral Events
-                                          │
-                                          ▼
-                                      Mongoose
-                                          │
-                                          ▼
-                                      MongoDB
+                                           │
+                         ┌─────────────────┼─────────────────┐
+                         │                 │                 │
+                         ▼                 ▼                 ▼
+                   User Presence        Rooms          Real-time Events
+                         │                 │                 │
+                         ▼                 ▼          ┌──────┼──────┐
+                     Map Store       Room Membership   │      │      │
+                                                       ▼      ▼      ▼
+                                                   Messages Typing System
+                                                       │
+                                                       ▼
+                                                Message Service
+                                                       │
+                                                       ▼
+                                                    Mongoose
+                                                       │
+                                                       ▼
+                                                    MongoDB
 ```
 
 ---
@@ -81,10 +91,11 @@ It acts as the central authority for the chat application by managing the HTTP s
 ## HTTP Server
 
 - Express application setup
-- Node HTTP server
+- Node.js HTTP server
 - Socket.IO attached to the HTTP server
 - CORS configuration for the React client
 - Environment variable configuration using dotenv
+- Database-first server startup
 
 ---
 
@@ -93,13 +104,17 @@ It acts as the central authority for the chat application by managing the HTTP s
 - Client connection handling
 - Client disconnection handling
 - Join chat event
+- Join room event
+- Room switching
 - Online users broadcast
 - Send message event
 - Receive message broadcast
+- Message history
 - Typing event
 - Stop typing event
 - Join system message
 - Leave system message
+- Room-specific broadcasting
 
 ---
 
@@ -130,7 +145,10 @@ X91YZ45 → Subramanya
 When a user joins:
 
 ```ts
-connectedUsers.set(socket.id, username);
+connectedUsers.set(
+    socket.id,
+    username
+);
 ```
 
 When a user disconnects:
@@ -142,20 +160,237 @@ connectedUsers.delete(socket.id);
 After users join or disconnect, the server broadcasts the updated user list:
 
 ```ts
-io.emit("online_users", [...connectedUsers.values()]);
+io.emit(
+    "online_users",
+    [...connectedUsers.values()]
+);
 ```
 
-The Map currently represents active users connected to the current server instance.
+The Map represents active users connected to the current server instance.
+
+---
+
+# Connected User Rooms
+
+The server also maintains an in-memory Map to track the current room of each connected socket:
+
+```ts
+const connectedUserRooms = new Map<string, string>();
+```
+
+The Map stores:
+
+```text
+socket.id → room
+```
+
+Example:
+
+```text
+socket_123 → general
+socket_456 → technology
+socket_789 → gaming
+```
+
+When a user joins a room:
+
+```ts
+connectedUserRooms.set(
+    socket.id,
+    room
+);
+```
+
+When a user disconnects:
+
+```ts
+connectedUserRooms.delete(
+    socket.id
+);
+```
+
+This allows the server to determine the user's current room for room-specific operations.
+
+---
+
+# Socket.IO Rooms
+
+The application uses Socket.IO rooms to isolate chat communication.
+
+Example rooms:
+
+```text
+general
+technology
+gaming
+```
+
+A client requests to join a room:
+
+```ts
+socket.emit("join_room", {
+    room: "general",
+});
+```
+
+The server then joins the socket to that room:
+
+```ts
+socket.join(room);
+```
+
+The server also tracks the current room:
+
+```ts
+connectedUserRooms.set(
+    socket.id,
+    room
+);
+```
+
+---
+
+# Room Switching
+
+When a user switches rooms, the server:
+
+1. Determines the user's previous room
+2. Leaves the previous Socket.IO room
+3. Joins the new room
+4. Updates `connectedUserRooms`
+5. Loads the new room's message history
+6. Sends the message history to the client
+7. Creates a system message indicating that the user joined the new room
+
+Flow:
+
+```text
+Client
+   │
+   │ join_room("technology")
+   ▼
+Server
+   │
+   ├── Get Previous Room
+   │
+   ├── Leave Previous Room
+   │
+   ├── Join Technology
+   │
+   ├── Update Room Map
+   │
+   ├── Load Technology History
+   │
+   └── Create Join System Message
+```
+
+The server prevents duplicate room joins:
+
+```ts
+if (previousRoom === room) {
+    return;
+}
+```
+
+---
+
+# Server-Side Room Resolution
+
+The server maintains the current room for every connected socket.
+
+```text
+socket.id
+    │
+    ▼
+connectedUserRooms
+    │
+    ▼
+current room
+```
+
+For example:
+
+```text
+socket_123 → general
+socket_456 → technology
+```
+
+The server uses this information for room-specific operations.
+
+The client sends:
+
+```ts
+socket.emit("send_message", {
+    username,
+    message,
+});
+```
+
+The server determines the current room from the socket:
+
+```ts
+const room =
+    connectedUserRooms.get(socket.id);
+```
+
+The message is then persisted and broadcast to that room.
+
+This ensures that room routing is controlled by the server.
+
+---
+
+# Message Broadcasting
+
+Normal messages are broadcast only to users in the current room.
+
+```ts
+io.to(room).emit(
+    "receive_message",
+    message
+);
+```
+
+Example:
+
+```text
+Alice
+  │
+  │ send_message
+  ▼
+Server
+  │
+  ▼
+Current Room = general
+  │
+  ▼
+io.to("general")
+  │
+  ├── Alice
+  ├── Bob
+  └── Charlie
+```
+
+Users in other rooms do not receive the message.
 
 ---
 
 # MongoDB
 
-MongoDB is used as the database layer for the chat application.
+MongoDB is used as the persistent database layer for the chat application.
 
-The server uses **Mongoose** to establish and manage the MongoDB connection.
+The server uses Mongoose to establish and manage the MongoDB connection.
 
-## Database Connection
+MongoDB stores:
+
+- Normal chat messages
+- System messages
+- Room information
+- Message IDs
+- Message timestamps
+
+---
+
+# Database Connection
 
 The connection is initialized when the server starts.
 
@@ -176,10 +411,10 @@ Connect to MongoDB
       └── Failure
              │
              ▼
-        Server Startup Fails
+       Server Startup Fails
 ```
 
-The MongoDB connection is configured through the environment variable:
+The MongoDB connection is configured through:
 
 ```env
 MONGODB_URI=mongodb://127.0.0.1:27017/socket-chat
@@ -195,6 +430,7 @@ MongoDB connection logic is separated from the application startup code.
 
 ```text
 src/
+
 ├── config/
 │   └── database.ts
 ```
@@ -208,39 +444,168 @@ The database configuration is responsible for:
 
 ---
 
-# Message Handling
+# Message Service
 
-When a client sends:
+Database-related message operations are separated into the message service.
 
 ```text
-send_message
+src/
+
+├── services/
+│   └── message.service.ts
 ```
 
-the server creates the complete message object.
-
-A normal message contains:
+The message service currently provides:
 
 ```ts
-const message = {
-  id: randomUUID(),
-  type: "message",
-  username: data.username,
-  message: data.message,
-  timestamp: new Date().toISOString(),
-};
+createMessage()
+createSystemMessage()
+getMessages()
 ```
 
-The server is responsible for generating:
+---
+
+# Create Message
+
+The `createMessage()` service is responsible for creating and persisting normal chat messages.
+
+```ts
+createMessage({
+    username,
+    message,
+    room,
+});
+```
+
+The service generates:
 
 - Unique message ID
-- Message timestamp
 - Message type
+- Timestamp
 
-The completed message is then broadcast:
+The message is then saved to MongoDB.
+
+---
+
+# Create System Message
+
+The `createSystemMessage()` service is responsible for creating and persisting system messages.
 
 ```ts
-io.emit("receive_message", message);
+createSystemMessage({
+    message,
+    room,
+});
 ```
+
+System messages are used for events such as:
+
+```text
+Alice joined the chat
+```
+
+and:
+
+```text
+Alice left the chat
+```
+
+System messages are also persisted in MongoDB.
+
+---
+
+# Get Messages
+
+Room-specific message history is loaded using:
+
+```ts
+getMessages(room);
+```
+
+The service retrieves messages for the requested room.
+
+Messages are sorted chronologically and limited to the latest 50 messages.
+
+```text
+MongoDB
+   │
+   ▼
+Filter by Room
+   │
+   ▼
+Sort by Timestamp
+   │
+   ▼
+Latest 50 Messages
+   │
+   ▼
+Return to Socket Handler
+```
+
+---
+
+# Message Persistence Flow
+
+When a client sends a message:
+
+```text
+Client
+   │
+   │ send_message
+   ▼
+Socket.IO Server
+   │
+   ▼
+Determine Current Room
+   │
+   ▼
+createMessage()
+   │
+   ▼
+MongoDB
+   │
+   ▼
+Saved Message
+   │
+   ▼
+receive_message
+   │
+   ▼
+Clients in Same Room
+```
+
+The server saves the message before broadcasting it.
+
+---
+
+# Message History Flow
+
+When a client joins a room:
+
+```text
+Client
+   │
+   │ join_room
+   ▼
+Socket.IO Server
+   │
+   ▼
+getMessages(room)
+   │
+   ▼
+MongoDB
+   │
+   ▼
+Latest 50 Room Messages
+   │
+   ▼
+message_history
+   │
+   ▼
+Joining Client
+```
+
+The message history is specific to the selected room.
 
 ---
 
@@ -253,84 +618,58 @@ message
 system
 ```
 
+---
+
 ## Normal Message
 
 A normal user-generated message contains:
 
 ```ts
 {
-  type: "message",
-  id: "...",
-  username: "Subramanya",
-  message: "Hello Socket.IO 👋",
-  timestamp: "..."
+    id: "...",
+    type: "message",
+    username: "Subramanya",
+    message: "Hello Socket.IO 👋",
+    room: "general",
+    timestamp: "..."
 }
 ```
 
-## System Message
+The server is responsible for generating:
 
-A system-generated event contains:
-
-```ts
-{
-  type: "system",
-  id: "...",
-  message: "Alice joined the chat",
-  timestamp: "..."
-}
-```
-
-System messages are generated by the server for application events such as:
-
-- User joining the chat
-- User leaving the chat
+- `id`
+- `type`
+- `timestamp`
+- `room`
 
 ---
 
-# Message Structure
+## System Message
 
-The client-side message model uses a discriminated union:
+A system-generated message contains:
 
 ```ts
-export type ChatMessage =
-  | {
-      type: "message";
-      id: string;
-      username: string;
-      message: string;
-      timestamp: string;
-    }
-  | {
-      type: "system";
-      id: string;
-      message: string;
-      timestamp: string;
-    };
+{
+    id: "...",
+    type: "system",
+    message: "Alice joined the chat",
+    room: "general",
+    timestamp: "..."
+}
 ```
 
-This allows the application to distinguish between:
+System messages are generated by the server for events such as:
 
-```text
-type === "message"
-        │
-        ▼
-Normal Chat Message
-```
+- User joining a room
+- User leaving a room
 
-and:
-
-```text
-type === "system"
-        │
-        ▼
-System Notification
-```
+System messages are persisted in MongoDB.
 
 ---
 
 # Join Chat
 
-When a user joins the chat:
+When a user joins the application:
 
 ```text
 Client
@@ -343,35 +682,110 @@ Server
    │
    ├── Store socket.id → username
    │
-   ├── Broadcast online_users
-   │
-   └── Create system message
-            │
-            ▼
-       receive_message
-            │
-            ▼
-      All Connected Clients
+   └── Broadcast online_users
 ```
 
-The server creates a system message:
+The `join_chat` event registers the username against the socket:
 
 ```ts
-{
-  id: randomUUID(),
-  type: "system",
-  message: `${username} joined the chat`,
-  timestamp: new Date().toISOString()
-}
+connectedUsers.set(
+    socket.id,
+    data.username
+);
 ```
 
-Example:
+The server then broadcasts the updated online users:
+
+```ts
+io.emit(
+    "online_users",
+    [...connectedUsers.values()]
+);
+```
+
+Room membership is handled separately through `join_room`.
+
+---
+
+# Join Room
+
+When a user joins a room:
 
 ```text
-────────────────────────────────
-      Alice joined the chat
-────────────────────────────────
+Client
+   │
+   ▼
+join_room
+   │
+   ▼
+Server
+   │
+   ├── Determine Previous Room
+   │
+   ├── Leave Previous Room
+   │
+   ├── Join New Room
+   │
+   ├── Track Current Room
+   │
+   ├── Load Message History
+   │
+   └── Create Join System Message
 ```
+
+The server joins the socket:
+
+```ts
+socket.join(room);
+```
+
+and tracks the room:
+
+```ts
+connectedUserRooms.set(
+    socket.id,
+    room
+);
+```
+
+The server then loads the room history and sends it to the joining client:
+
+```ts
+socket.emit(
+    "message_history",
+    formattedMessages
+);
+```
+
+A join system message is then created and broadcast to the room.
+
+---
+
+# Room Switching
+
+When a user changes rooms:
+
+```text
+Client
+   │
+   │ join_room("technology")
+   ▼
+Server
+   │
+   ├── Get Previous Room
+   │
+   ├── Leave Previous Room
+   │
+   ├── Join Technology
+   │
+   ├── Update connectedUserRooms
+   │
+   ├── Load Technology History
+   │
+   └── Create Join System Message
+```
+
+This prevents users from continuing to receive messages from their previous room.
 
 ---
 
@@ -388,43 +802,47 @@ disconnect
    ▼
 Server
    │
-   ├── Get username from socket.id
+   ├── Get Username
    │
-   ├── Remove user from Map
+   ├── Get Current Room
    │
-   ├── Create leave system message
+   ├── Remove User
    │
-   └── Broadcast updated online_users
+   ├── Remove Room Tracking
+   │
+   ├── Persist Leave System Message
+   │
+   └── Broadcast Updated Online Users
 ```
 
-The username must be retrieved before deleting the socket from the Map:
+The server retrieves the information before deleting it:
 
 ```ts
-const username = connectedUsers.get(socket.id);
+const username =
+    connectedUsers.get(socket.id);
+
+const room =
+    connectedUserRooms.get(socket.id);
 
 connectedUsers.delete(socket.id);
+connectedUserRooms.delete(socket.id);
 ```
 
-If the username exists, the server creates:
+If the username and room exist, a leave system message is created:
 
-```ts
-{
-  id: randomUUID(),
-  type: "system",
-  message: `${username} left the chat`,
-  timestamp: new Date().toISOString()
-}
+```text
+Alice left the chat
 ```
 
-This is then broadcast to the remaining clients.
+The message is persisted and broadcast to the remaining users in that room.
 
 ---
 
 # Typing Indicator
 
-The server treats typing status as **ephemeral real-time state**.
+Typing status is treated as ephemeral real-time state.
 
-Typing information is not treated as a persistent chat message.
+Typing events are not stored in MongoDB.
 
 ---
 
@@ -436,12 +854,22 @@ The client emits:
 typing
 ```
 
-The server receives it and broadcasts to all other clients:
+The server determines the user's current room:
 
 ```ts
-socket.broadcast.emit("user_typing", {
-  username: data.username,
-});
+const room =
+    connectedUserRooms.get(socket.id);
+```
+
+The server then broadcasts the typing event to other users in that room:
+
+```ts
+socket.to(room).emit(
+    "user_typing",
+    {
+        username: data.username,
+    }
+);
 ```
 
 The sender does not receive their own typing event.
@@ -456,73 +884,119 @@ The client emits:
 stop_typing
 ```
 
-The server broadcasts:
+The server determines the current room and broadcasts:
 
 ```ts
-socket.broadcast.emit("user_stopped_typing", {
-  username: data.username,
-});
+socket.to(room).emit(
+    "user_stopped_typing",
+    {
+        username: data.username,
+    }
+);
 ```
 
-This allows other clients to remove the typing indicator.
+This allows other clients in the same room to remove the typing indicator.
 
 ---
 
-# Why `socket.broadcast.emit()`?
+# Why `socket.to(room)`?
 
-For typing events, the sender doesn't need to receive their own typing status.
+Typing events are room-specific.
+
+If Alice is typing in:
+
+```text
+general
+```
+
+users in:
+
+```text
+technology
+gaming
+```
+
+should not receive Alice's typing status.
 
 Therefore:
 
 ```ts
-socket.broadcast.emit(...)
+socket.to(room).emit(...)
 ```
 
-is used instead of:
+is used.
+
+The sender is excluded because the sender already knows that they are typing.
+
+---
+
+# Socket.IO Broadcasting
+
+The server uses different Socket.IO broadcasting methods depending on the event.
+
+## `io.emit()`
+
+Used when every connected client should receive the event.
+
+Example:
 
 ```ts
-io.emit(...)
+io.emit(
+    "online_users",
+    users
+);
 ```
 
-The difference is:
+---
 
-```text
-io.emit()
-    ↓
-Every connected client
-    including sender
+## `io.to(room).emit()`
 
+Used when every user in a specific room should receive the event.
 
-socket.broadcast.emit()
-    ↓
-Every connected client
-    except sender
-```
-
-For chat messages and system messages, we use:
+Example:
 
 ```ts
-io.emit(...)
+io.to(room).emit(
+    "receive_message",
+    message
+);
 ```
 
-because every connected client should receive them.
+---
+
+## `socket.to(room).emit()`
+
+Used when users in a specific room should receive an event except the sender.
+
+Example:
+
+```ts
+socket.to(room).emit(
+    "user_typing",
+    {
+        username,
+    }
+);
+```
 
 ---
 
 # Socket Events
 
-| Event                 | Direction       | Description                                         |
-| --------------------- | --------------- | --------------------------------------------------- |
-| `connection`          | Client → Server | Fired when a client establishes a socket connection |
-| `join_chat`           | Client → Server | Registers the user's username                       |
-| `online_users`        | Server → Client | Broadcasts the current online users                 |
-| `send_message`        | Client → Server | Receives a message from a client                    |
-| `receive_message`     | Server → Client | Broadcasts a message or system message              |
-| `typing`              | Client → Server | Indicates that a user is typing                     |
-| `user_typing`         | Server → Client | Notifies other clients that a user is typing        |
-| `stop_typing`         | Client → Server | Indicates that a user stopped typing                |
-| `user_stopped_typing` | Server → Client | Notifies other clients that typing stopped          |
-| `disconnect`          | Client → Server | Handles socket disconnection                        |
+| Event | Direction | Description |
+|---|---|---|
+| `connection` | Client → Server | Fired when a client establishes a socket connection |
+| `join_chat` | Client → Server | Registers the user's username |
+| `online_users` | Server → Client | Broadcasts the current online users |
+| `join_room` | Client → Server | Requests to join a chat room |
+| `message_history` | Server → Client | Sends room-specific message history |
+| `send_message` | Client → Server | Sends a chat message |
+| `receive_message` | Server → Client | Broadcasts a normal or system message |
+| `typing` | Client → Server | Indicates that a user is typing |
+| `user_typing` | Server → Client | Notifies users in the same room that a user is typing |
+| `stop_typing` | Client → Server | Indicates that a user stopped typing |
+| `user_stopped_typing` | Server → Client | Notifies users that typing stopped |
+| `disconnect` | Client → Server | Handles socket disconnection |
 
 ---
 
@@ -541,40 +1015,39 @@ Server
    │
    ├── connectedUsers.set()
    │
-   ├── Broadcast online_users
-   │
-   └── Create system message
-            │
-            ▼
-       receive_message
-            │
-            ▼
-     Every Connected Client
+   └── Broadcast online_users
 ```
 
 ---
 
-## User Disconnects
+## User Joins Room
 
 ```text
 Client
    │
    ▼
-disconnect
+join_room
    │
    ▼
 Server
    │
-   ├── Get username
+   ├── Check Previous Room
    │
-   ├── connectedUsers.delete()
+   ├── Leave Previous Room
    │
-   ├── Create system message
+   ├── Join New Room
    │
-   └── Broadcast online_users
+   ├── Update connectedUserRooms
+   │
+   ├── Load Message History
+   │
+   └── Create Join System Message
             │
             ▼
-     Remaining Clients
+       receive_message
+            │
+            ▼
+       Room Participants
 ```
 
 ---
@@ -590,17 +1063,16 @@ send_message
    ▼
 Server
    │
-   ├── Generate message ID
+   ├── Determine Current Room
    │
-   ├── Generate timestamp
+   ├── Create Message
    │
-   ├── Set type = "message"
+   ├── Persist Message
    │
-   ▼
-receive_message
-   │
-   ▼
-Broadcast to Clients
+   └── Broadcast to Current Room
+            │
+            ▼
+       receive_message
 ```
 
 ---
@@ -616,11 +1088,67 @@ typing
    ▼
 Server
    │
-   ▼
-user_typing
+   ├── Determine Current Room
+   │
+   └── socket.to(room)
+            │
+            ▼
+       user_typing
+            │
+            ▼
+       Other Room Members
+```
+
+---
+
+## User Stops Typing
+
+```text
+Client
    │
    ▼
-Other Clients
+stop_typing
+   │
+   ▼
+Server
+   │
+   ├── Determine Current Room
+   │
+   └── socket.to(room)
+            │
+            ▼
+   user_stopped_typing
+            │
+            ▼
+       Other Room Members
+```
+
+---
+
+## User Disconnects
+
+```text
+Client
+   │
+   ▼
+disconnect
+   │
+   ▼
+Server
+   │
+   ├── Get Username
+   │
+   ├── Get Current Room
+   │
+   ├── Remove User
+   │
+   ├── Remove Room Tracking
+   │
+   ├── Persist Leave Message
+   │
+   ├── Broadcast Leave Message
+   │
+   └── Broadcast online_users
 ```
 
 ---
@@ -653,7 +1181,7 @@ Connect to MongoDB
       └── Failure
              │
              ▼
-        Exit Application
+       Server Startup Fails
 ```
 
 ---
@@ -662,6 +1190,7 @@ Connect to MongoDB
 
 ```text
 src/
+
 ├── app.ts
 ├── server.ts
 │
@@ -673,10 +1202,16 @@ src/
 │
 ├── controllers/
 ├── routes/
+│
 ├── services/
+│   └── message.service.ts
+│
 ├── middleware/
 ├── utils/
+│
 ├── models/
+│   └── message.ts
+│
 └── types/
 ```
 
@@ -686,7 +1221,6 @@ src/
 
 ```text
 Socket.IO Server
-
 │
 ├── HTTP Server
 │
@@ -701,18 +1235,29 @@ Socket.IO Server
 │      ├── socket.id → username
 │      └── Active Users
 │
-├── Message Processing
+├── Connected User Rooms
 │      │
-│      ├── Generate ID
-│      ├── Generate Timestamp
-│      ├── Determine Message Type
-│      └── Broadcast Message
+│      └── socket.id → room
+│
+├── Socket.IO Rooms
+│      │
+│      ├── general
+│      ├── technology
+│      └── gaming
+│
+├── Message Service
+│      │
+│      ├── createMessage()
+│      ├── createSystemMessage()
+│      └── getMessages()
 │
 └── Socket Events
        │
        ├── connection
        ├── join_chat
        ├── online_users
+       ├── join_room
+       ├── message_history
        ├── send_message
        ├── receive_message
        ├── typing
@@ -734,7 +1279,7 @@ pnpm install
 
 ---
 
-## Environment Variables
+# Environment Variables
 
 Create a `.env` file in the server root:
 
@@ -749,7 +1294,7 @@ Do not commit `.env` to Git.
 
 ---
 
-## Start Development Server
+# Start Development Server
 
 ```bash
 pnpm dev
@@ -771,17 +1316,27 @@ http://localhost:5173
 
 # Available Scripts
 
+## Development
+
 ```bash
 pnpm dev
 ```
 
 Starts the development server with hot reload.
 
+---
+
+## Build
+
 ```bash
 pnpm build
 ```
 
 Compiles the TypeScript project.
+
+---
+
+## Production
 
 ```bash
 pnpm start
@@ -806,12 +1361,23 @@ Runs the compiled production build.
 - Server-generated message IDs
 - Server-generated timestamps
 - Normal and system message types
-- Join/leave system messages
+- Join and leave system messages
+- Message persistence
+- Message history
+- Room-specific message persistence
+- Socket.IO rooms
+- Room switching
+- Room membership tracking
+- Server-side room resolution
 - Real-time typing events
-- `socket.broadcast.emit()` usage
+- Room-specific typing indicators
+- `socket.to(room).emit()` usage
+- `io.to(room).emit()` usage
+- `io.emit()` usage
 - Separation of persistent and ephemeral events
 - MongoDB connection
 - Mongoose integration
+- Message service architecture
 - Environment-based database configuration
 - Database-first server startup
 
@@ -823,11 +1389,15 @@ Runs the compiled production build.
 - Separation of HTTP and WebSocket responsibilities
 - Type-safe event payloads using TypeScript
 - In-memory state management for active connections
-- Server-authoritative message metadata
+- Server-authoritative room membership
+- Server-authoritative message routing
+- Server-generated message metadata
 - Separation of persistent messages and ephemeral events
 - Separation of socket communication and database logic
 - Environment-based configuration
 - Clean separation of concerns
+- Room-specific event broadcasting
+- Database-backed message history
 - Scalable foundation for distributed communication
 
 ---
@@ -874,15 +1444,31 @@ Runs the compiled production build.
 
 ✅ Mongoose Setup
 
-🚧 Message Persistence
+✅ Message Persistence
 
-🚧 Message History
+✅ Message History
 
-🚧 Chat Rooms
+✅ Message Service
+
+✅ Socket.IO Chat Rooms
+
+✅ Room Switching
+
+✅ Room Membership Tracking
+
+✅ Room-specific Message Broadcasting
+
+✅ Room-specific Message History
+
+✅ Room-specific Typing Indicators
+
+✅ Server-side Room Resolution
 
 🚧 Private Messaging
 
 🚧 Authentication
+
+🚧 Authorization
 
 🚧 Redis Pub/Sub
 
@@ -890,22 +1476,97 @@ Runs the compiled production build.
 
 🚧 Horizontal Scaling
 
+🚧 File Sharing
+
+🚧 Read Receipts
+
+🚧 Message Reactions
+
 ---
 
 # Upcoming Features
 
-- MongoDB message persistence
-- Message history
-- Chat rooms using Socket.IO rooms
-- Private messaging
 - JWT authentication
 - User authentication and authorization
+- Private messaging
 - Redis Pub/Sub
 - Socket.IO Redis Adapter
 - Horizontal scaling
+- Message pagination
 - File sharing
 - Read receipts
 - Message reactions
 - User avatars
 - Rate limiting
 - Production monitoring
+- REST APIs
+- Distributed room state
+
+---
+
+# Future Architecture
+
+```text
+                         React Clients
+                              │
+                              ▼
+                         Load Balancer
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+         Node.js #1       Node.js #2       Node.js #3
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                       Socket.IO Redis
+                           Adapter
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                    ▼                   ▼
+                  Redis             MongoDB
+              Pub/Sub / State     Message Storage
+```
+
+The future architecture will allow the application to scale horizontally across multiple Node.js instances while maintaining real-time communication between connected clients.
+
+---
+
+# Current Architecture Summary
+
+```text
+                         React Client
+                              │
+                              ▼
+                       Socket.IO Client
+                              │
+                              ▼
+                     Node.js HTTP Server
+                              │
+                     ┌────────┴────────┐
+                     │                 │
+                     ▼                 ▼
+                 Express           Socket.IO
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │                  │                  │
+                    ▼                  ▼                  ▼
+              User Presence       Room Management     Real-time Events
+                    │                  │                  │
+                    ▼                  ▼            ┌─────┼─────┐
+              connectedUsers    connectedUserRooms  │     │     │
+                                                     ▼     ▼     ▼
+                                                 Messages Typing System
+                                                     │
+                                                     ▼
+                                               Message Service
+                                                     │
+                                                     ▼
+                                                  Mongoose
+                                                     │
+                                                     ▼
+                                                   MongoDB
+```
+
+The current architecture provides a foundation for a persistent, room-based, real-time chat application with server-controlled room routing and MongoDB-backed message history.
