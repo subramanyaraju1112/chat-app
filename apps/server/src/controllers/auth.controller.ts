@@ -4,6 +4,27 @@ import {
     loginUser,
 } from "../services/auth.service.js";
 
+export const getCurrentUser = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                message: "Unauthorized",
+            });
+        }
+
+        return res.status(200).json({
+            user: req.user,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Failed to get user",
+        });
+    }
+};
+
 export const register = async (
     req: Request,
     res: Response
