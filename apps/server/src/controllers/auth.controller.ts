@@ -3,6 +3,7 @@ import {
     registerUser,
     loginUser,
 } from "../services/auth.service.js";
+import { User } from "../models/user.js";
 
 export const getCurrentUser = async (
     req: Request,
@@ -15,12 +16,27 @@ export const getCurrentUser = async (
             });
         }
 
+        const user = await User.findById(
+            req.user.userId
+        ).select("-password");
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+            });
+        }
+
         return res.status(200).json({
-            user: req.user,
+            user,
         });
     } catch (error) {
+        console.error(
+            "Failed to get current user:",
+            error
+        );
+
         return res.status(500).json({
-            message: "Failed to get user",
+            message: "Failed to get current user",
         });
     }
 };
@@ -81,35 +97,32 @@ export const login = async (
     res: Response
 ) => {
     try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({
-                message:
-                    "Email and password are required",
-            });
-        }
-
         const result = await loginUser({
-            email,
-            password,
+            email: req.body.email,
+            password: req.body.password,
         });
+
+        res.cookie(
+            "accessToken",
+            result.accessToken,
+            {
+                httpOnly: true,
+                secure: false,
+                sameSite: "lax",
+                maxAge: 15 * 60 * 1000,
+            }
+        );
 
         return res.status(200).json({
             message: "Login successful",
-            ...result,
+            user: result.user,
         });
     } catch (error) {
-        console.error(
-            "❌ Login failed:",
-            error
-        );
-
         return res.status(401).json({
             message:
                 error instanceof Error
                     ? error.message
-                    : "Invalid email or password",
+                    : "Login failed",
         });
     }
 };
