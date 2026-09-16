@@ -2,9 +2,7 @@
 
 Frontend for the real-time chat application built with React, TypeScript, Vite, Tailwind CSS, and Socket.IO Client.
 
-The client provides the chat UI, room management, real-time messaging, online user presence, typing indicators, and message history.
-
----
+The client provides authentication, chat UI, room management, real-time messaging, online user presence, typing indicators, and message history.
 
 ## Tech Stack
 
@@ -14,24 +12,34 @@ The client provides the chat UI, room management, real-time messaging, online us
 - Tailwind CSS
 - Socket.IO Client
 
----
-
 ## Features
 
-- Join chat with username
+### Authentication
+- User login
+- JWT access token handling
+- Authenticated Socket.IO connection
+- Server-provided authenticated socket identity
+
+### Real-Time Chat
+- Socket.IO connections
 - Real-time messaging
-- Chat rooms
-- Room switching
-- Room-specific message history
-- Online users
+- Online user presence
 - Typing indicators
 - Join/leave system messages
-- Own vs other message styling
 - Automatic scroll to latest message
-- MongoDB-backed message history
-- Socket.IO real-time communication
 
----
+### Chat Rooms
+- Multiple chat rooms
+- Room switching
+- Room-specific messaging
+- Room-specific message history
+- Room-specific typing indicators
+- Server-controlled room membership
+
+### Message Persistence
+- MongoDB-backed message history
+- Latest 50 messages per room
+- Normal and system message rendering
 
 ## Architecture
 
@@ -39,29 +47,29 @@ The client provides the chat UI, room management, real-time messaging, online us
                     React Application
                            │
                            ▼
-                     Socket.IO Client
+                    Authentication
                            │
-                           ▼
-                    Node.js + Socket.IO
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-           Rooms        Messages      Typing
-              │            │            │
-              └────────────┼────────────┘
-                           │
-                           ▼
-                        MongoDB
+                    ┌──────┴──────┐
+                    ▼             ▼
+                HTTP API      Socket.IO Client
+                    │             │
+                    │             │ JWT
+                    │             ▼
+                    │       Socket.IO Server
+                    │             │
+                    └─────────────┤
+                                  ▼
+                             MongoDB
 ```
 
----
+The client communicates with the backend through HTTP APIs for authentication and Socket.IO for real-time communication.
 
 ## Application Structure
 
 ```text
 App
 │
-├── JoinChat
+├── Authentication
 │
 └── ChatLayout
     │
@@ -76,7 +84,42 @@ App
         └── Message Input
 ```
 
----
+## Authentication
+
+The client authenticates through the backend login API.
+
+```text
+Client
+  │
+  │ POST /api/auth/login
+  ▼
+Server
+  │
+  │ accessToken + user
+  ▼
+Client
+  │
+  │ socket.auth = { token }
+  ▼
+Socket.IO Handshake
+  │
+  ▼
+Authenticated Socket
+```
+
+The Socket.IO client uses:
+
+```ts
+socket.auth = {
+  token: accessToken,
+};
+
+socket.connect();
+```
+
+The server verifies the token during the Socket.IO handshake.
+
+The client uses `autoConnect: false` so the socket can be authenticated before establishing the connection.
 
 ## Chat Rooms
 
@@ -92,15 +135,13 @@ The current room is maintained in application state.
 
 When switching rooms, the client:
 
-1. Updates the selected room
-2. Clears the current messages
-3. Clears the typing indicator
-4. Emits `join_room`
-5. Receives the new room's message history
+1. Updates the selected room.
+2. Clears the current messages.
+3. Clears the typing indicator.
+4. Emits `join_room`.
+5. Receives the new room's message history.
 
 The server controls the actual Socket.IO room membership.
-
----
 
 ## Messaging
 
@@ -112,6 +153,9 @@ Client
   │ send_message
   ▼
 Socket.IO Server
+  │
+  ▼
+Message Service
   │
   ▼
 MongoDB
@@ -144,13 +188,11 @@ type ChatMessage =
     };
 ```
 
-Normal messages are aligned according to ownership, while system messages are displayed separately.
-
----
+Normal messages are styled according to ownership, while system messages are displayed separately.
 
 ## Message History
 
-When joining a room, the client receives the room's previous messages through:
+When joining a room, the client receives previous messages through:
 
 ```text
 message_history
@@ -174,8 +216,6 @@ message_history
 Client
 ```
 
----
-
 ## Online Users
 
 The client listens for:
@@ -185,8 +225,6 @@ online_users
 ```
 
 and updates the sidebar whenever users join or disconnect.
-
----
 
 ## Typing Indicator
 
@@ -222,8 +260,6 @@ user_stopped_typing
 
 Typing notifications are scoped to the current room.
 
----
-
 ## System Messages
 
 The client supports server-generated system messages for events such as:
@@ -234,8 +270,6 @@ Alice left the chat
 ```
 
 System messages are persisted and displayed differently from normal messages.
-
----
 
 ## Socket Events
 
@@ -251,9 +285,7 @@ System messages are persisted and displayed differently from normal messages.
 | `user_typing` | Server → Client | Typing notification |
 | `stop_typing` | Client → Server | Stop typing |
 | `user_stopped_typing` | Server → Client | Remove typing indicator |
-| `disconnect` | Server → Client | Handle disconnect |
-
----
+| `disconnect` | Server | Handle disconnect |
 
 ## Folder Structure
 
@@ -262,13 +294,11 @@ src/
 ├── components/
 │   ├── auth/
 │   │   └── JoinChat.tsx
-│   │
 │   ├── chat/
 │   │   ├── ChatBox.tsx
 │   │   ├── ChatLayout.tsx
 │   │   ├── ChatMessageItem.tsx
 │   │   └── MessageList.tsx
-│   │
 │   └── sidebar/
 │       └── Sidebar.tsx
 │
@@ -276,6 +306,7 @@ src/
 │   └── socket.ts
 │
 ├── types/
+│   ├── auth.ts
 │   ├── message.ts
 │   └── room.ts
 │
@@ -283,45 +314,25 @@ src/
 └── main.tsx
 ```
 
----
-
 ## Getting Started
-
-Install dependencies:
 
 ```bash
 pnpm install
-```
-
-Start the development server:
-
-```bash
 pnpm dev
 ```
 
-Client:
+Client: `http://localhost:5173`
 
-```text
-http://localhost:5173
-```
-
-Backend:
-
-```text
-http://localhost:3000
-```
-
----
+Backend: `http://localhost:3000`
 
 ## Current Status
 
-### Completed
-
+### Application
 - ✅ React + Vite
 - ✅ TypeScript
 - ✅ Tailwind CSS
 - ✅ Socket.IO Client
-- ✅ Join Chat
+- ✅ Chat UI
 - ✅ Online Users
 - ✅ Real-time Messaging
 - ✅ Message History
@@ -333,10 +344,15 @@ http://localhost:3000
 - ✅ System Messages
 - ✅ Auto-scroll
 
-### Upcoming
+### Authentication
+- 🚧 Login UI
+- 🚧 JWT access token handling
+- 🚧 Connect JWT with Socket.IO handshake
+- 🚧 Authenticated socket identity
+- 🚧 Protected client routes
+- 🚧 Refresh token handling
 
-- 🚧 Authentication UI
-- 🚧 JWT integration
+### Upcoming
 - 🚧 Private messaging
 - 🚧 Message pagination
 - 🚧 File sharing
@@ -344,7 +360,29 @@ http://localhost:3000
 - 🚧 Message reactions
 - 🚧 Dark mode
 
----
+## Roadmap
+
+### Authentication
+- Complete client login flow
+- Pass JWT through Socket.IO handshake
+- Use authenticated socket identity
+- Remove client-provided username from trusted events
+- Add protected client routes
+- Add refresh token handling
+
+### Messaging
+- Private messaging
+- Message pagination
+- Message delivery/read status
+- Message editing and deletion
+- Message reactions
+- File sharing
+
+### UI
+- Dark mode
+- Improved responsive layouts
+- Notifications
+- User profiles
 
 ## Future Architecture
 
@@ -365,6 +403,7 @@ http://localhost:3000
                     ┌─────────┴─────────┐
                     ▼                   ▼
                   Redis              MongoDB
+                Pub/Sub            Persistence
 ```
 
 The application is designed to evolve from a single Socket.IO server into a horizontally scalable real-time system.
