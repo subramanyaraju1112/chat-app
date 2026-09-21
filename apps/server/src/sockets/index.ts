@@ -7,6 +7,8 @@ import {
     getMessages,
 } from "../services/message.service.js";
 
+import { authenticateSocket } from "../middleware/socket.middleware.js";
+
 interface JoinRoomPayload {
     room: string;
 }
@@ -34,6 +36,8 @@ export const initializeSocket = (httpServer: HTTPServer) => {
             methods: ["GET", "POST"],
         },
     });
+    
+    io.use(authenticateSocket);
 
     io.on("connection", (socket) => {
         console.log(`✅ User Connected: ${socket.id}`);
