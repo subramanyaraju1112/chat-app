@@ -8,12 +8,39 @@ export interface AuthenticatedSocket extends Socket {
     };
 }
 
+const getAccessTokenFromCookie = (
+    cookieHeader?: string
+) => {
+    if (!cookieHeader) {
+        return null;
+    }
+
+    const cookies = cookieHeader
+        .split(";")
+        .map((cookie) => cookie.trim());
+
+    const accessTokenCookie = cookies.find(
+        (cookie) =>
+            cookie.startsWith("accessToken=")
+    );
+
+    if (!accessTokenCookie) {
+        return null;
+    }
+
+    return accessTokenCookie.split("=")[1];
+};
+
 export const authenticateSocket = (
     socket: Socket,
     next: (err?: Error) => void
 ) => {
     try {
-        const token = socket.handshake.auth.token;
+        const cookieHeader =
+            socket.handshake.headers.cookie;
+
+        const token =
+            getAccessTokenFromCookie(cookieHeader);
 
         if (!token) {
             return next(
@@ -21,7 +48,8 @@ export const authenticateSocket = (
             );
         }
 
-        const payload = verifyAccessToken(token);
+        const payload =
+            verifyAccessToken(token);
 
         const authenticatedSocket =
             socket as AuthenticatedSocket;
