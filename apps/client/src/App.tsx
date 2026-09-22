@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { socket } from "./socket/socket";
+import { login } from "./api/auth";
 import type { ChatMessage } from "./types/message";
 import JoinChat from "./components/auth/JoinChat";
 import ChatLayout from "./components/chat/ChatLayout";
@@ -10,34 +11,47 @@ function App() {
   const [room, setRoom] = useState("general");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [typingUser, setTypingUser] =
+    useState<string | null>(null);
 
-  const handleReceiveMessage = (data: ChatMessage) => {
+  const handleReceiveMessage = (
+    data: ChatMessage
+  ) => {
     setMessages((previousMessages) => [
       ...previousMessages,
       data,
     ]);
   };
 
-  const handleJoinChat = (username: string) => {
-    setUsername(username);
+  const handleLogin = async (
+    email: string,
+    password: string
+  ) => {
+    try {
+      const data = await login({
+        email,
+        password,
+      });
 
-    socket.emit("join_chat", {
-      username,
-    });
+      setUsername(data.user.username);
 
-    socket.emit("join_room", {
-      room,
-    });
-
-    setIsJoined(true);
+      socket.connect();
+    } catch (error) {
+      console.error(
+        "❌ Login failed:",
+        error
+      );
+    }
   };
 
   useEffect(() => {
-    socket.connect();
-
     socket.on("connect", () => {
-      console.log("✅ Connected:", socket.id);
+      console.log(
+        "✅ Connected:",
+        socket.id
+      );
+
+      setIsJoined(true);
     });
 
     socket.on(
@@ -88,13 +102,17 @@ function App() {
       socket.off("online_users");
       socket.off("message_history");
       socket.off("user_typing");
-      socket.off("user_stopped_typing");
+      socket.off(
+        "user_stopped_typing"
+      );
 
       socket.disconnect();
     };
   }, []);
 
-  const handleRoomChange = (newRoom: string) => {
+  const handleRoomChange = (
+    newRoom: string
+  ) => {
     if (newRoom === room) return;
 
     setRoom(newRoom);
@@ -120,7 +138,9 @@ function App() {
     });
   };
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = (
+    message: string
+  ) => {
     socket.emit("send_message", {
       username,
       message,
@@ -131,7 +151,9 @@ function App() {
   return (
     <div>
       {!isJoined ? (
-        <JoinChat onJoin={handleJoinChat} />
+        <JoinChat
+          onLogin={handleLogin}
+        />
       ) : (
         <ChatLayout
           username={username}
@@ -139,10 +161,16 @@ function App() {
           messages={messages}
           onlineUsers={onlineUsers}
           typingUser={typingUser}
-          onRoomChange={handleRoomChange}
+          onRoomChange={
+            handleRoomChange
+          }
           onTyping={handleTyping}
-          onStopTyping={handleStopTyping}
-          onSendMessage={handleSendMessage}
+          onStopTyping={
+            handleStopTyping
+          }
+          onSendMessage={
+            handleSendMessage
+          }
         />
       )}
     </div>
